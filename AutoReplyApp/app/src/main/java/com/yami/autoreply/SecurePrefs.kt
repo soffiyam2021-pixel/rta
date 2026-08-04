@@ -1,0 +1,66 @@
+package com.yami.autoreply
+
+import android.content.Context
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+
+/**
+ * Guarda la API key y la configuración de forma cifrada en el dispositivo.
+ */
+object SecurePrefs {
+
+    private const val FILE_NAME = "auto_reply_secure_prefs"
+    private const val KEY_API_KEY = "api_key"
+    private const val KEY_PROMPT = "prompt"
+    private const val KEY_ACTIVE = "active"
+    private const val KEY_SELECTED_APPS = "selected_apps"
+
+    private fun prefs(context: Context): SharedPreferences {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+
+        return EncryptedSharedPreferences.create(
+            context,
+            FILE_NAME,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
+    fun saveApiKey(context: Context, apiKey: String) {
+        prefs(context).edit().putString(KEY_API_KEY, apiKey).apply()
+    }
+
+    fun getApiKey(context: Context): String {
+        return prefs(context).getString(KEY_API_KEY, "") ?: ""
+    }
+
+    fun savePrompt(context: Context, prompt: String) {
+        prefs(context).edit().putString(KEY_PROMPT, prompt).apply()
+    }
+
+    fun getPrompt(context: Context): String {
+        val default = "Respondé de forma breve, cordial y profesional al mensaje recibido."
+        return prefs(context).getString(KEY_PROMPT, default) ?: default
+    }
+
+    fun setActive(context: Context, active: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ACTIVE, active).apply()
+    }
+
+    fun isActive(context: Context): Boolean {
+        return prefs(context).getBoolean(KEY_ACTIVE, false)
+    }
+
+    fun saveSelectedApps(context: Context, packageNames: Set<String>) {
+        prefs(context).edit().putStringSet(KEY_SELECTED_APPS, packageNames).apply()
+    }
+
+    /** Vacío = responder en todas las apps (comportamiento por defecto). */
+    fun getSelectedApps(context: Context): Set<String> {
+        return prefs(context).getStringSet(KEY_SELECTED_APPS, emptySet()) ?: emptySet()
+    }
+}

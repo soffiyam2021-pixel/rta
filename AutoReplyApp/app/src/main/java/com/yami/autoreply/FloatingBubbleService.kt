@@ -1,0 +1,110 @@
+package com.yami.autoreply
+
+import android.app.*
+import android.content.Context
+import android.content.Intent
+import android.graphics.PixelFormat
+import android.os.Build
+import android.os.IBinder
+import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import androidx.core.app.NotificationCompat
+
+class FloatingBubbleService : Service() {
+
+    private var windowManager: WindowManager? = null
+    private var bubbleView: View? = null
+
+    companion object {
+        private const val CHANNEL_ID = "auto_reply_status"
+        private const val NOTIF_ID = 1001
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        startForeground(NOTIF_ID, buildForegroundNotification())
+        showBubble()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun buildForegroundNotification(): Notification {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Estado de Auto Reply",
+                NotificationManager.IMPORTANCE_MIN
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+        }
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Auto Reply activo")
+            .setContentText("Respondiendo mensajes entrantes automáticamente")
+            .setSmallIcon(android.R.drawable.ic_secure)
+            .setOngoing(true)
+            .build()
+    }
+
+    private fun showBubble() {
+        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        bubbleView = LayoutInflater.from(this).inflate(R.layout.floating_bubble, null)
+
+        val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            layoutType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        )
+        params.gravity = Gravity.TOP or Gravity.END
+        params.x = 16
+        params.y = 120
+
+        // Permite arrastrar la burbuja para reposicionarla
+        var initialX = 0
+        var initialY = 0
+        var touchX = 0f
+        var touchY = 0f
+
+        bubbleView?.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = params.x
+                    initialY = params.y
+                    touchX = event.rawX
+                    touchY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    params.x = initialX - (event.rawX - touchX).toInt()
+                    params.y = initialY + (event.rawY - touchY).toInt()
+                    windowManager?.updateViewLayout(bubbleView, params)
+                    true
+                }
+                else -> false
+            }
+        }
+
+        windowManager?.addView(bubbleView, params)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        bubbleView?.let { windowManager?.removeView(it) }
+    }
+}
