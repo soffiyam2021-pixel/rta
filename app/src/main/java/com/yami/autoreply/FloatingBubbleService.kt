@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -21,10 +22,12 @@ class FloatingBubbleService : Service() {
     companion object {
         private const val CHANNEL_ID = "auto_reply_status"
         private const val NOTIF_ID = 1001
+        private const val TAG = "AutoReplyDebug"
     }
 
     override fun onCreate() {
         super.onCreate()
+        Log.d(TAG, "FloatingBubbleService onCreate")
         startForeground(NOTIF_ID, buildForegroundNotification())
         showBubble()
     }
@@ -41,20 +44,21 @@ class FloatingBubbleService : Service() {
                 CHANNEL_ID,
                 "Estado de Auto Reply",
                 NotificationManager.IMPORTANCE_MIN
-            )
+                )
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
         }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Auto Reply activo")
-            .setContentText("Respondiendo mensajes entrantes automáticamente")
-            .setSmallIcon(android.R.drawable.ic_secure)
-            .setOngoing(true)
-            .build()
+        .setContentTitle("Auto Reply activo")
+        .setContentText("Respondiendo mensajes entrantes automaticamente")
+        .setSmallIcon(android.R.drawable.ic_secure)
+        .setOngoing(true)
+        .build()
     }
 
     private fun showBubble() {
+        Log.d(TAG, "showBubble llamado")
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         bubbleView = LayoutInflater.from(this).inflate(R.layout.floating_bubble, null)
 
@@ -70,24 +74,26 @@ class FloatingBubbleService : Service() {
             layoutType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
-        )
+            )
         params.gravity = Gravity.TOP or Gravity.END
         params.x = 16
         params.y = 120
 
-        // Permite arrastrar la burbuja para reposicionarla
         var initialX = 0
         var initialY = 0
         var touchX = 0f
         var touchY = 0f
+        var downTime = 0L
 
         bubbleView?.setOnTouchListener { view, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    Log.d(TAG, "ACTION_DOWN detectado")
                     initialX = params.x
                     initialY = params.y
                     touchX = event.rawX
                     touchY = event.rawY
+                    downTime = System.currentTimeMillis()
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -96,11 +102,22 @@ class FloatingBubbleService : Service() {
                     windowManager?.updateViewLayout(bubbleView, params)
                     true
                 }
+                MotionEvent.ACTION_UP -> {
+                    val movedDistance = Math.abs(event.rawX - touchX) + Math.abs(event.rawY - touchY)
+                    val tapDuration = System.currentTimeMillis() - downTime
+                    Log.d(TAG, "ACTION_UP moved=" + movedDistance + " duration=" + tapDuration)
+                    if (movedDistance < 20 && tapDuration < 500) {
+                        Log.d(TAG, "Fue un tap, instance es null? " + (TimoAccessibilityService.instance == null))
+                        TimoAccessibilityService.instance?.scanAndNotify()
+                    }
+                    true
+                }
                 else -> false
             }
         }
 
         windowManager?.addView(bubbleView, params)
+        Log.d(TAG, "Burbuja agregada a la ventana")
     }
 
     override fun onDestroy() {
