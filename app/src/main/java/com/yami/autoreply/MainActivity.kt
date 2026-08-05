@@ -34,10 +34,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.overlayPermissionButton.setOnClickListener {
             if (!Settings.canDrawOverlays(this)) {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + packageName))
                 startActivity(intent)
             }
         }
@@ -46,17 +43,16 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, AppSelectionActivity::class.java))
         }
 
+        binding.accessibilityButton.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+
         binding.activeSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked && binding.apiKeyInput.text.toString().isBlank()) {
-                AlertDialog.Builder(this)
-                    .setTitle("Falta la API key")
-                    .setMessage("Ingresá tu API key de Gemini y guardá la configuración antes de activar.")
-                    .setPositiveButton("Entendido", null)
-                    .show()
+                AlertDialog.Builder(this).setTitle("Falta la API key").setMessage("Ingresa tu API key de Gemini y guarda la configuracion antes de activar.").setPositiveButton("Entendido", null).show()
                 binding.activeSwitch.isChecked = false
                 return@setOnCheckedChangeListener
             }
-
             SecurePrefs.setActive(this, isChecked)
             if (isChecked) {
                 startFloatingService()
@@ -77,10 +73,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatusText() {
-        binding.statusText.text = if (SecurePrefs.isActive(this)) {
-            "Estado: activo — respondiendo mensajes automáticamente"
-        } else {
-            "Estado: inactivo"
-        }
+        binding.statusText.text = if (SecurePrefs.isActive(this)) "Estado: activo" else "Estado: inactivo"
     }
 }
