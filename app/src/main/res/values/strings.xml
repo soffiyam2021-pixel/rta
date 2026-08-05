@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Auto Reply</string>
+    <string name="accessibility_service_description">Permite que Auto Reply escanee la pantalla para responder mensajes automaticamente en apps sin respuesta rapida.</string>
 </resources>
