@@ -61,6 +61,8 @@ class FloatingBubbleService : Service() {
         Log.d(TAG, "showBubble llamado")
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         bubbleView = LayoutInflater.from(this).inflate(R.layout.floating_bubble, null)
+        bubbleView?.isClickable = true
+        bubbleView?.isFocusable = true
 
         val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -72,12 +74,12 @@ class FloatingBubbleService : Service() {
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             layoutType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
             )
-        params.gravity = Gravity.TOP or Gravity.END
-        params.x = 16
-        params.y = 120
+        params.gravity = Gravity.TOP or Gravity.START
+        params.x = 20
+        params.y = 150
 
         var initialX = 0
         var initialY = 0
@@ -86,6 +88,7 @@ class FloatingBubbleService : Service() {
         var downTime = 0L
 
         bubbleView?.setOnTouchListener { view, event ->
+            Log.d(TAG, "evento touch recibido, action=" + event.action)
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     Log.d(TAG, "ACTION_DOWN detectado")
@@ -97,7 +100,7 @@ class FloatingBubbleService : Service() {
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    params.x = initialX - (event.rawX - touchX).toInt()
+                    params.x = initialX + (event.rawX - touchX).toInt()
                     params.y = initialY + (event.rawY - touchY).toInt()
                     windowManager?.updateViewLayout(bubbleView, params)
                     true
@@ -106,7 +109,7 @@ class FloatingBubbleService : Service() {
                     val movedDistance = Math.abs(event.rawX - touchX) + Math.abs(event.rawY - touchY)
                     val tapDuration = System.currentTimeMillis() - downTime
                     Log.d(TAG, "ACTION_UP moved=" + movedDistance + " duration=" + tapDuration)
-                    if (movedDistance < 20 && tapDuration < 500) {
+                    if (movedDistance < 25 && tapDuration < 600) {
                         Log.d(TAG, "Fue un tap, instance es null? " + (TimoAccessibilityService.instance == null))
                         TimoAccessibilityService.instance?.scanAndNotify()
                     }
@@ -117,7 +120,7 @@ class FloatingBubbleService : Service() {
         }
 
         windowManager?.addView(bubbleView, params)
-        Log.d(TAG, "Burbuja agregada a la ventana")
+        Log.d(TAG, "Burbuja agregada a la ventana, x=" + params.x + " y=" + params.y)
     }
 
     override fun onDestroy() {
