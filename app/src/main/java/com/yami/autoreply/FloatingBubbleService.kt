@@ -13,11 +13,15 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class FloatingBubbleService : Service() {
 
     private var windowManager: WindowManager? = null
     private var bubbleView: View? = null
+    private val scope = CoroutineScope(Dispatchers.Default)
 
     companion object {
         private const val CHANNEL_ID = "auto_reply_status"
@@ -58,7 +62,6 @@ class FloatingBubbleService : Service() {
     }
 
     private fun showBubble() {
-        Log.e(TAG, "showBubble llamado")
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         bubbleView = LayoutInflater.from(this).inflate(R.layout.floating_bubble, null)
         bubbleView?.isClickable = true
@@ -86,12 +89,11 @@ class FloatingBubbleService : Service() {
         var touchX = 0f
         var touchY = 0f
         var downTime = 0L
+        var lastTapUpTime = 0L
 
         bubbleView?.setOnTouchListener { view, event ->
-            Log.e(TAG, "evento touch recibido, action=" + event.action)
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    Log.e(TAG, "ACTION_DOWN detectado")
                     initialX = params.x
                     initialY = params.y
                     touchX = event.rawX
@@ -108,10 +110,19 @@ class FloatingBubbleService : Service() {
                 MotionEvent.ACTION_UP -> {
                     val movedDistance = Math.abs(event.rawX - touchX) + Math.abs(event.rawY - touchY)
                     val tapDuration = System.currentTimeMillis() - downTime
-                    Log.e(TAG, "ACTION_UP moved=" + movedDistance + " duration=" + tapDuration)
+                    val now = System.currentTimeMillis()
                     if (movedDistance < 25 && tapDuration < 600) {
-                        Log.e(TAG, "Fue un tap, instance es null? " + (TimoAccessibilityService.instance == null))
-                        TimoAccessibilityService.instance?.scanAndNotify()
+                        if (now - lastTapUpTime < 400) {
+                            Log.e(TAG, "Doble tap detectado, prueba de autoReply")
+                            lastTapUpTime = 0L
+                            scope.launch {
+                                val ok = TimoAccessibilityService.instance?.autoReplyCurrentChat("Mensaje de prueba automatico")
+                                Log.e(TAG, "resultado prueba autoReply: " + ok)
+                            }
+                        } else {
+                            lastTapUpTime = now
+                            TimoAccessibilityService.instance?.scanAndNotify()
+                        }
                     }
                     true
                 }
