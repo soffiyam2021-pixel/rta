@@ -20,7 +20,7 @@ class TimoAccessibilityService : AccessibilityService() {
 
       override fun onServiceConnected() {
             super.onServiceConnected()
-            Log.d(TAG, "TimoAccessibilityService conectado, guardando instance")
+            Log.e(TAG, "TimoAccessibilityService conectado")
             instance = this
       }
 
@@ -35,38 +35,44 @@ class TimoAccessibilityService : AccessibilityService() {
       override fun onInterrupt() {}
 
       fun scanAndNotify() {
-            Log.d(TAG, "scanAndNotify llamado")
-            val root = rootInActiveWindow
-            if (root == null) {
-                  Log.d(TAG, "rootInActiveWindow es null")
-                  showScanNotification("Escaneo fallo", "No se pudo leer la pantalla actual.")
-                  return
-            }
-            Log.d(TAG, "root encontrado, escaneando")
-
-            val found = mutableListOf<String>()
-            collectNodes(root, found, depth = 0)
-
-            Log.d(TAG, "elementos encontrados: " + found.size)
-
-            if (found.isEmpty()) {
-                  showScanNotification("Escaneo vacio", "No se encontraron elementos con texto o clickeables en esta pantalla.")
-                  return
-            }
-
-            val chunks = mutableListOf<StringBuilder>()
-            var current = StringBuilder()
-            for (line in found) {
-                  if (current.length + line.length > 700) {
-                        chunks.add(current)
-                        current = StringBuilder()
+            try {
+                  Log.e(TAG, "scanAndNotify entro al try")
+                  val root = rootInActiveWindow
+                  if (root == null) {
+                        Log.e(TAG, "rootInActiveWindow es null")
+                        showScanNotification("Escaneo fallo", "No se pudo leer la pantalla actual.")
+                        return
                   }
-                  current.append(line).append("\n")
-            }
-            if (current.isNotEmpty()) chunks.add(current)
+                  Log.e(TAG, "root encontrado, escaneando")
 
-            chunks.forEachIndexed { index, chunk ->
-                  showScanNotification("Escaneo (${index + 1}/${chunks.size})", chunk.toString())
+                  val found = mutableListOf<String>()
+                  collectNodes(root, found, depth = 0)
+
+                  Log.e(TAG, "elementos encontrados: " + found.size)
+
+                  if (found.isEmpty()) {
+                        showScanNotification("Escaneo vacio", "No se encontraron elementos con texto o clickeables en esta pantalla.")
+                        return
+                  }
+
+                  val chunks = mutableListOf<StringBuilder>()
+                  var current = StringBuilder()
+                  for (line in found) {
+                        if (current.length + line.length > 700) {
+                              chunks.add(current)
+                              current = StringBuilder()
+                        }
+                        current.append(line).append("\n")
+                  }
+                  if (current.isNotEmpty()) chunks.add(current)
+
+                  Log.e(TAG, "voy a mostrar " + chunks.size + " notificaciones")
+                  chunks.forEachIndexed { index, chunk ->
+                        showScanNotification("Escaneo (${index + 1}/${chunks.size})", chunk.toString())
+                  }
+                  Log.e(TAG, "termine de mostrar notificaciones")
+            } catch (e: Exception) {
+                  Log.e(TAG, "EXCEPCION en scanAndNotify: " + e.toString())
             }
       }
 
@@ -99,6 +105,7 @@ class TimoAccessibilityService : AccessibilityService() {
       }
 
       private fun showScanNotification(title: String, text: String) {
+            Log.e(TAG, "showScanNotification: " + title)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                   val channel = NotificationChannel(
                         SCAN_CHANNEL_ID,
@@ -119,5 +126,6 @@ class TimoAccessibilityService : AccessibilityService() {
 
             val manager = getSystemService(NotificationManager::class.java)
             manager.notify(scanNotifId++, notification)
+            Log.e(TAG, "notify() llamado con id " + (scanNotifId - 1))
       }
 }
