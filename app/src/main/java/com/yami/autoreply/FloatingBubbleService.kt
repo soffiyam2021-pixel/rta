@@ -27,7 +27,7 @@ class FloatingBubbleService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "FloatingBubbleService onCreate")
+        Log.e(TAG, "FloatingBubbleService onCreate")
         startForeground(NOTIF_ID, buildForegroundNotification())
         showBubble()
     }
@@ -58,7 +58,7 @@ class FloatingBubbleService : Service() {
     }
 
     private fun showBubble() {
-        Log.d(TAG, "showBubble llamado")
+        Log.e(TAG, "showBubble llamado")
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         bubbleView = LayoutInflater.from(this).inflate(R.layout.floating_bubble, null)
         bubbleView?.isClickable = true
@@ -88,10 +88,10 @@ class FloatingBubbleService : Service() {
         var downTime = 0L
 
         bubbleView?.setOnTouchListener { view, event ->
-            Log.d(TAG, "evento touch recibido, action=" + event.action)
+            Log.e(TAG, "evento touch recibido, action=" + event.action)
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    Log.d(TAG, "ACTION_DOWN detectado")
+                    Log.e(TAG, "ACTION_DOWN detectado")
                     initialX = params.x
                     initialY = params.y
                     touchX = event.rawX
@@ -108,9 +108,9 @@ class FloatingBubbleService : Service() {
                 MotionEvent.ACTION_UP -> {
                     val movedDistance = Math.abs(event.rawX - touchX) + Math.abs(event.rawY - touchY)
                     val tapDuration = System.currentTimeMillis() - downTime
-                    Log.d(TAG, "ACTION_UP moved=" + movedDistance + " duration=" + tapDuration)
+                    Log.e(TAG, "ACTION_UP moved=" + movedDistance + " duration=" + tapDuration)
                     if (movedDistance < 25 && tapDuration < 600) {
-                        Log.d(TAG, "Fue un tap, instance es null? " + (TimoAccessibilityService.instance == null))
+                        Log.e(TAG, "Fue un tap, instance es null? " + (TimoAccessibilityService.instance == null))
                         TimoAccessibilityService.instance?.scanAndNotify()
                     }
                     true
@@ -120,7 +120,7 @@ class FloatingBubbleService : Service() {
         }
 
         windowManager?.addView(bubbleView, params)
-        Log.d(TAG, "Burbuja agregada a la ventana, x=" + params.x + " y=" + params.y)
+        Log.e(TAG, "Burbuja agregada a la ventana, x=" + params.x + " y=" + params.y)
     }
 
     override fun onDestroy() {
