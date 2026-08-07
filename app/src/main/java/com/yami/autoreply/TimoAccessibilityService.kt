@@ -71,7 +71,6 @@ class TimoAccessibilityService : AccessibilityService() {
             }
       }
 
-      /** Un rectangulo es valido si tiene ancho y alto positivos y razonables (no fantasma). */
       private fun isValidBounds(b: Rect): Boolean {
             val w = b.width()
             val h = b.height()
@@ -120,7 +119,7 @@ class TimoAccessibilityService : AccessibilityService() {
                   val setOk = editText.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
                   Log.e(TAG, "autoReply: ACTION_SET_TEXT devolvio " + setOk)
 
-                  Thread.sleep(600)
+                  Thread.sleep(900)
 
                   val freshRoot = rootInActiveWindow
                   if (freshRoot == null) {
@@ -128,16 +127,28 @@ class TimoAccessibilityService : AccessibilityService() {
                         return false
                   }
 
-                  val sendCandidates = mutableListOf<AccessibilityNodeInfo>()
-                  collectSendCandidates(freshRoot, editBounds, sendCandidates, 0)
-                  Log.e(TAG, "autoReply: candidatos de boton enviar: " + sendCandidates.size)
+                  val freshEditCandidates = mutableListOf<AccessibilityNodeInfo>()
+                  collectEditTexts(freshRoot, freshEditCandidates, 0)
+                  var freshEditBounds = editBounds
+                  for (c in freshEditCandidates) {
+                        val b = Rect()
+                        c.getBoundsInScreen(b)
+                        if (isValidBounds(b)) {
+                              freshEditBounds = b
+                        }
+                  }
+                  Log.e(TAG, "autoReply: freshEditBounds=" + freshEditBounds.toString())
+
+                  val rowCandidates = mutableListOf<AccessibilityNodeInfo>()
+                  collectRowCandidates(freshRoot, freshEditBounds, rowCandidates, 0)
+                  Log.e(TAG, "autoReply: candidatos en la fila: " + rowCandidates.size)
 
                   var sendButton: AccessibilityNodeInfo? = null
                   var bestX = -1
-                  for (c in sendCandidates) {
+                  for (c in rowCandidates) {
                         val b = Rect()
                         c.getBoundsInScreen(b)
-                        Log.e(TAG, "autoReply: candidato enviar bounds=" + b.toString() + " valido=" + isValidBounds(b))
+                        Log.e(TAG, "autoReply: candidato fila bounds=" + b.toString() + " valido=" + isValidBounds(b))
                         if (isValidBounds(b) && b.centerX() > bestX) {
                               bestX = b.centerX()
                               sendButton = c
@@ -174,21 +185,22 @@ class TimoAccessibilityService : AccessibilityService() {
             }
       }
 
-      private fun collectSendCandidates(node: AccessibilityNodeInfo, editBounds: Rect, candidates: MutableList<AccessibilityNodeInfo>, depth: Int) {
+      /** Cualquier elemento clickeable en la misma franja vertical que el cuadro de texto, sin importar si esta a la izquierda o derecha. */
+      private fun collectRowCandidates(node: AccessibilityNodeInfo, editBounds: Rect, candidates: MutableList<AccessibilityNodeInfo>, depth: Int) {
             if (depth > 25) return
             if (node.isClickable) {
                   val b = Rect()
                   node.getBoundsInScreen(b)
-                  val sameRow = Math.abs(b.centerY() - editBounds.centerY()) < 80
-                  val toTheRight = b.centerX() > editBounds.right
+                  val sameRow = Math.abs(b.centerY() - editBounds.centerY()) < 100
                   val notEditTextItself = !(node.className?.toString() ?: "").contains("EditText")
-                  if (sameRow && toTheRight && notEditTextItself) {
+                  val notTooWide = b.width() < editBounds.width()
+                  if (sameRow && notEditTextItself && notTooWide) {
                         candidates.add(node)
                   }
             }
             for (i in 0 until node.childCount) {
                   val child = node.getChild(i) ?: continue
-                  collectSendCandidates(child, editBounds, candidates, depth + 1)
+                  collectRowCandidates(child, editBounds, candidates, depth + 1)
             }
       }
 
