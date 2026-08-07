@@ -7,6 +7,7 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import android.view.GestureDetector
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -62,6 +63,7 @@ class FloatingBubbleService : Service() {
     }
 
     private fun showBubble() {
+        Log.e(TAG, "showBubble llamado")
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         bubbleView = LayoutInflater.from(this).inflate(R.layout.floating_bubble, null)
         bubbleView?.isClickable = true
@@ -88,42 +90,49 @@ class FloatingBubbleService : Service() {
         var initialY = 0
         var touchX = 0f
         var touchY = 0f
-        var downTime = 0L
-        var lastTapUpTime = 0L
+        var isDragging = false
+
+        val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                Log.e(TAG, "onSingleTapConfirmed: escaneo")
+                TimoAccessibilityService.instance?.scanAndNotify()
+                return true
+            }
+
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                Log.e(TAG, "onDoubleTap: prueba de autoReply")
+                scope.launch {
+                    val ok = TimoAccessibilityService.instance?.autoReplyCurrentChat("Mensaje de prueba automatico")
+                    Log.e(TAG, "resultado prueba autoReply: " + ok)
+                }
+                return true
+            }
+        })
 
         bubbleView?.setOnTouchListener { view, event ->
+            gestureDetector.onTouchEvent(event)
+
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     initialX = params.x
                     initialY = params.y
                     touchX = event.rawX
                     touchY = event.rawY
-                    downTime = System.currentTimeMillis()
+                    isDragging = false
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    params.x = initialX + (event.rawX - touchX).toInt()
-                    params.y = initialY + (event.rawY - touchY).toInt()
-                    windowManager?.updateViewLayout(bubbleView, params)
+                    val dx = event.rawX - touchX
+                    val dy = event.rawY - touchY
+                    if (Math.abs(dx) > 15 || Math.abs(dy) > 15) {
+                        isDragging = true
+                        params.x = initialX + dx.toInt()
+                        params.y = initialY + dy.toInt()
+                        windowManager?.updateViewLayout(bubbleView, params)
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    val movedDistance = Math.abs(event.rawX - touchX) + Math.abs(event.rawY - touchY)
-                    val tapDuration = System.currentTimeMillis() - downTime
-                    val now = System.currentTimeMillis()
-                    if (movedDistance < 25 && tapDuration < 600) {
-                        if (now - lastTapUpTime < 400) {
-                            Log.e(TAG, "Doble tap detectado, prueba de autoReply")
-                            lastTapUpTime = 0L
-                            scope.launch {
-                                val ok = TimoAccessibilityService.instance?.autoReplyCurrentChat("Mensaje de prueba automatico")
-                                Log.e(TAG, "resultado prueba autoReply: " + ok)
-                            }
-                        } else {
-                            lastTapUpTime = now
-                            TimoAccessibilityService.instance?.scanAndNotify()
-                        }
-                    }
                     true
                 }
                 else -> false
