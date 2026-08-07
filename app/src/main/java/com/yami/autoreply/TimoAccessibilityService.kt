@@ -43,15 +43,12 @@ class TimoAccessibilityService : AccessibilityService() {
                         showScanNotification("Escaneo fallo", "No se pudo leer la pantalla actual.")
                         return
                   }
-
                   val found = mutableListOf<String>()
                   collectNodes(root, found, depth = 0)
-
                   if (found.isEmpty()) {
                         showScanNotification("Escaneo vacio", "No se encontraron elementos con texto o clickeables en esta pantalla.")
                         return
                   }
-
                   val chunks = mutableListOf<StringBuilder>()
                   var current = StringBuilder()
                   for (line in found) {
@@ -62,7 +59,6 @@ class TimoAccessibilityService : AccessibilityService() {
                         current.append(line).append("\n")
                   }
                   if (current.isNotEmpty()) chunks.add(current)
-
                   chunks.forEachIndexed { index, chunk ->
                         showScanNotification("Escaneo (${index + 1}/${chunks.size})", chunk.toString())
                   }
@@ -75,6 +71,100 @@ class TimoAccessibilityService : AccessibilityService() {
             val w = b.width()
             val h = b.height()
             return w > 10 && h > 10 && w < 3000 && h < 3000
+      }
+
+      /** Responde automaticamente a todas las conversaciones con mensajes sin leer visibles en la lista actual. */
+      fun respondToAllUnread(replyText: String) {
+            try {
+                  Log.e(TAG, "respondToAllUnread iniciado")
+                  var attempts = 0
+                  var repliedCount = 0
+                  while (attempts < 10) {
+                        attempts++
+                        val root = rootInActiveWindow
+                        if (root == null) {
+                              Log.e(TAG, "respondToAllUnread: root es null, freno")
+                              break
+                        }
+
+                        val unreadRow = findFirstUnreadRow(root)
+                        if (unreadRow == null) {
+                              Log.e(TAG, "respondToAllUnread: no hay mas conversaciones sin leer visibles")
+                              break
+                        }
+
+                        val rowBounds = Rect()
+                        unreadRow.getBoundsInScreen(rowBounds)
+                        Log.e(TAG, "respondToAllUnread: abriendo fila en " + rowBounds.toString())
+
+                        val clickOk = unreadRow.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        Log.e(TAG, "respondToAllUnread: click en fila devolvio " + clickOk)
+                        if (!clickOk) break
+
+                        Thread.sleep(1200)
+
+                        val sent = autoReplyCurrentChat(replyText)
+                        Log.e(TAG, "respondToAllUnread: autoReplyCurrentChat devolvio " + sent)
+                        if (sent) repliedCount++
+
+                        Thread.sleep(500)
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                        Thread.sleep(1000)
+                  }
+                  Log.e(TAG, "respondToAllUnread: termino, respondidas=" + repliedCount)
+                  showScanNotification("Respuestas automaticas", "Se respondieron " + repliedCount + " conversaciones sin leer.")
+            } catch (e: Exception) {
+                  Log.e(TAG, "EXCEPCION en respondToAllUnread: " + e.toString())
+            }
+      }
+
+      /** Busca el primer elemento clickeable que tenga cerca un numerito (globo de no leido) como hijo/hermano. */
+      private fun findFirstUnreadRow(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+            val badges = mutableListOf<AccessibilityNodeInfo>()
+            collectUnreadBadges(root, badges, 0)
+            Log.e(TAG, "findFirstUnreadRow: globos encontrados=" + badges.size)
+
+            var best: AccessibilityNodeInfo? = null
+            var bestY = Int.MAX_VALUE
+            for (badge in badges) {
+                  val container = findClickableAncestor(badge, 10)
+                  if (container != null) {
+                        val b = Rect()
+                        container.getBoundsInScreen(b)
+                        if (isValidBounds(b) && b.top < bestY) {
+                              bestY = b.top
+                              best = container
+                        }
+                  }
+            }
+            return best
+      }
+
+      private fun collectUnreadBadges(node: AccessibilityNodeInfo, found: MutableList<AccessibilityNodeInfo>, depth: Int) {
+            if (depth > 25) return
+            val text = node.text?.toString()?.trim()
+            if (!text.isNullOrBlank() && (text.matches(Regex("^[0-9]{1,3}$")) || text == "99+")) {
+                  val b = Rect()
+                  node.getBoundsInScreen(b)
+                  if (isValidBounds(b) && b.width() < 100 && b.height() < 100) {
+                        found.add(node)
+                  }
+            }
+            for (i in 0 until node.childCount) {
+                  val child = node.getChild(i) ?: continue
+                  collectUnreadBadges(child, found, depth + 1)
+            }
+      }
+
+      private fun findClickableAncestor(node: AccessibilityNodeInfo, maxUp: Int): AccessibilityNodeInfo? {
+            var current: AccessibilityNodeInfo? = node
+            var steps = 0
+            while (current != null && steps < maxUp) {
+                  if (current.isClickable) return current
+                  current = current.parent
+                  steps++
+            }
+            return null
       }
 
       fun autoReplyCurrentChat(replyText: String): Boolean {
@@ -95,7 +185,6 @@ class TimoAccessibilityService : AccessibilityService() {
                   for (c in editCandidates) {
                         val b = Rect()
                         c.getBoundsInScreen(b)
-                        Log.e(TAG, "autoReply: candidato EditText bounds=" + b.toString() + " valido=" + isValidBounds(b))
                         if (isValidBounds(b) && b.bottom > bestY) {
                               bestY = b.bottom
                               editText = c
@@ -137,7 +226,6 @@ class TimoAccessibilityService : AccessibilityService() {
                               freshEditBounds = b
                         }
                   }
-                  Log.e(TAG, "autoReply: freshEditBounds=" + freshEditBounds.toString())
 
                   val rowCandidates = mutableListOf<AccessibilityNodeInfo>()
                   collectRowCandidates(freshRoot, freshEditBounds, rowCandidates, 0)
@@ -148,7 +236,6 @@ class TimoAccessibilityService : AccessibilityService() {
                   for (c in rowCandidates) {
                         val b = Rect()
                         c.getBoundsInScreen(b)
-                        Log.e(TAG, "autoReply: candidato fila bounds=" + b.toString() + " valido=" + isValidBounds(b))
                         if (isValidBounds(b) && b.centerX() > bestX) {
                               bestX = b.centerX()
                               sendButton = c
@@ -185,7 +272,6 @@ class TimoAccessibilityService : AccessibilityService() {
             }
       }
 
-      /** Cualquier elemento clickeable en la misma franja vertical que el cuadro de texto, sin importar si esta a la izquierda o derecha. */
       private fun collectRowCandidates(node: AccessibilityNodeInfo, editBounds: Rect, candidates: MutableList<AccessibilityNodeInfo>, depth: Int) {
             if (depth > 25) return
             if (node.isClickable) {
@@ -206,17 +292,14 @@ class TimoAccessibilityService : AccessibilityService() {
 
       private fun collectNodes(node: AccessibilityNodeInfo, found: MutableList<String>, depth: Int) {
             if (depth > 25) return
-
             val text = node.text?.toString()?.trim()
             val desc = node.contentDescription?.toString()?.trim()
             val id = node.viewIdResourceName
             val className = node.className?.toString()?.substringAfterLast('.')
-
             val hasContent = !text.isNullOrBlank() || !desc.isNullOrBlank()
             if (node.isClickable || hasContent) {
                   val bounds = Rect()
                   node.getBoundsInScreen(bounds)
-
                   val parts = mutableListOf<String>()
                   if (!text.isNullOrBlank()) parts.add("texto=\"$text\"")
                   if (!desc.isNullOrBlank()) parts.add("desc=\"$desc\"")
@@ -228,7 +311,6 @@ class TimoAccessibilityService : AccessibilityService() {
                         found.add(parts.joinToString(" | "))
                   }
             }
-
             for (i in 0 until node.childCount) {
                   val child = node.getChild(i) ?: continue
                   collectNodes(child, found, depth + 1)
@@ -246,7 +328,6 @@ class TimoAccessibilityService : AccessibilityService() {
                   val manager = getSystemService(NotificationManager::class.java)
                   manager.createNotificationChannel(channel)
             }
-
             val notification = NotificationCompat.Builder(applicationContext, SCAN_CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
@@ -254,7 +335,6 @@ class TimoAccessibilityService : AccessibilityService() {
             .setSmallIcon(android.R.drawable.ic_menu_search)
             .setAutoCancel(true)
             .build()
-
             val manager = getSystemService(NotificationManager::class.java)
             manager.notify(scanNotifId++, notification)
       }
