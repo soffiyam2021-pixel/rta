@@ -101,7 +101,7 @@ class FloatingBubbleService : Service() {
             override fun onDoubleTap(e: MotionEvent): Boolean {
                 Log.e(TAG, "onDoubleTap: prueba de autoReply")
                 scope.launch {
-                    val ok = TimoAccessibilityService.instance?.autoReplyCurrentChat("Mensaje de prueba automatico")
+                    val ok = TimoAccessibilityService.instance?.autoReplyCurrentChat("Hola")
                     Log.e(TAG, "resultado prueba autoReply: " + ok)
                 }
                 return true
@@ -110,7 +110,7 @@ class FloatingBubbleService : Service() {
             override fun onLongPress(e: MotionEvent) {
                 Log.e(TAG, "onLongPress: prueba de respondToAllUnread")
                 scope.launch {
-                    TimoAccessibilityService.instance?.respondToAllUnread("Mensaje de prueba automatico")
+                    TimoAccessibilityService.instance?.respondToAllUnread("Hola")
                 }
             }
         })
