@@ -84,13 +84,12 @@ class FloatingBubbleService : Service() {
             )
         params.gravity = Gravity.TOP or Gravity.START
         params.x = 20
-                params.y = 60
+        params.y = 60
 
         var initialX = 0
         var initialY = 0
         var touchX = 0f
         var touchY = 0f
-        var isDragging = false
 
         val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
@@ -107,6 +106,13 @@ class FloatingBubbleService : Service() {
                 }
                 return true
             }
+
+            override fun onLongPress(e: MotionEvent) {
+                Log.e(TAG, "onLongPress: prueba de respondToAllUnread")
+                scope.launch {
+                    TimoAccessibilityService.instance?.respondToAllUnread("Mensaje de prueba automatico")
+                }
+            }
         })
 
         bubbleView?.setOnTouchListener { view, event ->
@@ -118,14 +124,12 @@ class FloatingBubbleService : Service() {
                     initialY = params.y
                     touchX = event.rawX
                     touchY = event.rawY
-                    isDragging = false
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - touchX
                     val dy = event.rawY - touchY
                     if (Math.abs(dx) > 15 || Math.abs(dy) > 15) {
-                        isDragging = true
                         params.x = initialX + dx.toInt()
                         params.y = initialY + dy.toInt()
                         windowManager?.updateViewLayout(bubbleView, params)
