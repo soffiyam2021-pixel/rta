@@ -84,7 +84,7 @@ class FloatingBubbleService : Service() {
             )
         params.gravity = Gravity.TOP or Gravity.START
         params.x = 20
-        params.y = 150
+                params.y = 60
 
         var initialX = 0
         var initialY = 0
