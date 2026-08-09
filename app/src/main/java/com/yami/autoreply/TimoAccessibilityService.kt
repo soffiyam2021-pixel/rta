@@ -73,7 +73,6 @@ class TimoAccessibilityService : AccessibilityService() {
             return w > 10 && h > 10 && w < 3000 && h < 3000
       }
 
-      /** Responde automaticamente a todas las conversaciones con mensajes sin leer visibles en la lista actual. */
       fun respondToAllUnread(replyText: String) {
             try {
                   Log.e(TAG, "respondToAllUnread iniciado")
@@ -118,7 +117,6 @@ class TimoAccessibilityService : AccessibilityService() {
             }
       }
 
-      /** Busca el primer elemento clickeable que tenga cerca un numerito (globo de no leido) como hijo/hermano. */
       private fun findFirstUnreadRow(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
             val badges = mutableListOf<AccessibilityNodeInfo>()
             collectUnreadBadges(root, badges, 0)
@@ -127,12 +125,16 @@ class TimoAccessibilityService : AccessibilityService() {
             var best: AccessibilityNodeInfo? = null
             var bestY = Int.MAX_VALUE
             for (badge in badges) {
+                  val b = Rect()
+                  badge.getBoundsInScreen(b)
+                  Log.e(TAG, "findFirstUnreadRow: candidato globo bounds=" + b.toString())
                   val container = findClickableAncestor(badge, 10)
                   if (container != null) {
-                        val b = Rect()
-                        container.getBoundsInScreen(b)
-                        if (isValidBounds(b) && b.top < bestY) {
-                              bestY = b.top
+                        val cb = Rect()
+                        container.getBoundsInScreen(cb)
+                        Log.e(TAG, "findFirstUnreadRow: contenedor bounds=" + cb.toString())
+                        if (isValidBounds(cb) && cb.height() > 100 && cb.width() > 300 && cb.top < bestY) {
+                              bestY = cb.top
                               best = container
                         }
                   }
@@ -146,7 +148,7 @@ class TimoAccessibilityService : AccessibilityService() {
             if (!text.isNullOrBlank() && (text.matches(Regex("^[0-9]{1,3}$")) || text == "99+")) {
                   val b = Rect()
                   node.getBoundsInScreen(b)
-                  if (isValidBounds(b) && b.width() < 100 && b.height() < 100) {
+                  if (isValidBounds(b) && b.width() < 60 && b.height() < 60 && b.left < 250) {
                         found.add(node)
                   }
             }
