@@ -104,6 +104,8 @@ class TimoAccessibilityService : AccessibilityService() {
 
                         val sent = autoReplyCurrentChat(replyText)
                         Log.e(TAG, "respondToAllUnread: autoReplyCurrentChat devolvio " + sent)
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                        Thread.sleep(700)
                         if (sent) repliedCount++
 
                         Thread.sleep(500)
