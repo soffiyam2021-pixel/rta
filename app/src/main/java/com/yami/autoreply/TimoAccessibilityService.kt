@@ -73,7 +73,8 @@ class TimoAccessibilityService : AccessibilityService() {
             return w > 10 && h > 10 && w < 3000 && h < 3000
       }
 
-      fun respondToAllUnread(replyText: String) {
+      /** Responde con IA a todas las conversaciones sin leer visibles en la lista actual. */
+      fun respondToAllUnread() {
             try {
                   Log.e(TAG, "respondToAllUnread iniciado")
                   var attempts = 0
@@ -102,13 +103,13 @@ class TimoAccessibilityService : AccessibilityService() {
 
                         Thread.sleep(1200)
 
-                        val sent = autoReplyCurrentChat(replyText)
-                        Log.e(TAG, "respondToAllUnread: autoReplyCurrentChat devolvio " + sent)
-                        performGlobalAction(GLOBAL_ACTION_BACK)
-                        Thread.sleep(700)
+                        val sent = autoReplyWithAI()
+                        Log.e(TAG, "respondToAllUnread: autoReplyWithAI devolvio " + sent)
                         if (sent) repliedCount++
 
                         Thread.sleep(500)
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                        Thread.sleep(700)
                         performGlobalAction(GLOBAL_ACTION_BACK)
                         Thread.sleep(1000)
                   }
@@ -129,12 +130,10 @@ class TimoAccessibilityService : AccessibilityService() {
             for (badge in badges) {
                   val b = Rect()
                   badge.getBoundsInScreen(b)
-                  Log.e(TAG, "findFirstUnreadRow: candidato globo bounds=" + b.toString())
                   val container = findClickableAncestor(badge, 10)
                   if (container != null) {
                         val cb = Rect()
                         container.getBoundsInScreen(cb)
-                        Log.e(TAG, "findFirstUnreadRow: contenedor bounds=" + cb.toString())
                         if (isValidBounds(cb) && cb.height() > 100 && cb.width() > 300 && cb.top < bestY) {
                               bestY = cb.top
                               best = container
@@ -171,54 +170,133 @@ class TimoAccessibilityService : AccessibilityService() {
             return null
       }
 
+      /** Version de prueba con texto fijo (se mantiene para diagnostico). */
       fun autoReplyCurrentChat(replyText: String): Boolean {
+            val root = rootInActiveWindow ?: return false
+            val editText = findBestEditText(root) ?: return false
+            val editBounds = Rect()
+            editText.getBoundsInScreen(editBounds)
+            return typeAndSend(editText, editBounds, replyText)
+      }
+
+      /** Lee el ultimo mensaje entrante del chat actual, genera una respuesta con IA y la envia. */
+      fun autoReplyWithAI(): Boolean {
             try {
-                  Log.e(TAG, "autoReplyCurrentChat iniciado")
+                  Log.e(TAG, "autoReplyWithAI iniciado")
                   val root = rootInActiveWindow
                   if (root == null) {
-                        Log.e(TAG, "autoReply: root es null")
+                        Log.e(TAG, "autoReplyWithAI: root es null")
                         return false
                   }
 
-                  val editCandidates = mutableListOf<AccessibilityNodeInfo>()
-                  collectEditTexts(root, editCandidates, 0)
-                  Log.e(TAG, "autoReply: EditText candidatos encontrados: " + editCandidates.size)
+                  val editText = findBestEditText(root)
+                  if (editText == null) {
+                        Log.e(TAG, "autoReplyWithAI: ningun EditText con coordenadas validas")
+                        return false
+                  }
+                  val editBounds = Rect()
+                  editText.getBoundsInScreen(editBounds)
 
-                  var editText: AccessibilityNodeInfo? = null
-                  var bestY = -1
-                  for (c in editCandidates) {
-                        val b = Rect()
-                        c.getBoundsInScreen(b)
-                        if (isValidBounds(b) && b.bottom > bestY) {
-                              bestY = b.bottom
-                              editText = c
+                  val incomingMessage = findLatestIncomingMessage(root, editBounds)
+                  Log.e(TAG, "autoReplyWithAI: mensaje entrante detectado: " + incomingMessage)
+
+                  if (incomingMessage.isNullOrBlank()) {
+                        Log.e(TAG, "autoReplyWithAI: no se detecto mensaje entrante, cancelando")
+                        return false
+                  }
+
+                  val apiKey = SecurePrefs.getApiKey(applicationContext)
+                  val userInstructions = SecurePrefs.getPrompt(applicationContext)
+
+                  val result = ClaudeApiClient.generateReply(
+                        apiKey,
+                        "Timo",
+                        "",
+                        incomingMessage,
+                        userInstructions
+                        )
+
+                  val replyText: String
+                  when (result) {
+                        is ReplyResult.Success -> {
+                              replyText = result.text
+                              Log.e(TAG, "autoReplyWithAI: IA genero: " + replyText)
+                        }
+                        is ReplyResult.Error -> {
+                              Log.e(TAG, "autoReplyWithAI: error de IA: " + result.message)
+                              return false
                         }
                   }
 
-                  if (editText == null) {
-                        Log.e(TAG, "autoReply: ningun EditText con coordenadas validas")
-                        return false
+                  return typeAndSend(editText, editBounds, replyText)
+            } catch (e: Exception) {
+                  Log.e(TAG, "EXCEPCION en autoReplyWithAI: " + e.toString())
+                  return false
+            }
+      }
+
+      private fun findBestEditText(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+            val editCandidates = mutableListOf<AccessibilityNodeInfo>()
+            collectEditTexts(root, editCandidates, 0)
+            var editText: AccessibilityNodeInfo? = null
+            var bestY = -1
+            for (c in editCandidates) {
+                  val b = Rect()
+                  c.getBoundsInScreen(b)
+                  if (isValidBounds(b) && b.bottom > bestY) {
+                        bestY = b.bottom
+                        editText = c
                   }
+            }
+            return editText
+      }
 
-                  val editBounds = Rect()
-                  editText.getBoundsInScreen(editBounds)
-                  Log.e(TAG, "autoReply: EditText elegido en " + editBounds.toString())
+      /** Busca el texto visible mas cercano al fondo de la pantalla, por encima del cuadro de escritura. */
+      private fun findLatestIncomingMessage(root: AccessibilityNodeInfo, editBounds: Rect): String? {
+            val candidates = mutableListOf<Pair<String, Rect>>()
+            collectMessageTexts(root, candidates, 0)
 
+            val filtered = candidates.filter { (text, bounds) ->
+                  bounds.top < editBounds.top - 20 &&
+                  text.length > 1 &&
+                  !text.matches(Regex("^[0-9]{1,3}$")) &&
+                  !text.matches(Regex("^[0-9]{1,2}:[0-9]{2}$")) &&
+                  text != "99+"
+            }
+
+            val best = filtered.maxByOrNull { it.second.top }
+            return best?.first
+      }
+
+      private fun collectMessageTexts(node: AccessibilityNodeInfo, found: MutableList<Pair<String, Rect>>, depth: Int) {
+            if (depth > 25) return
+            val text = node.text?.toString()?.trim()
+            if (!text.isNullOrBlank()) {
+                  val b = Rect()
+                  node.getBoundsInScreen(b)
+                  if (isValidBounds(b)) {
+                        found.add(Pair(text, b))
+                  }
+            }
+            for (i in 0 until node.childCount) {
+                  val child = node.getChild(i) ?: continue
+                  collectMessageTexts(child, found, depth + 1)
+            }
+      }
+
+      private fun typeAndSend(editText: AccessibilityNodeInfo, editBounds: Rect, replyText: String): Boolean {
+            try {
                   editText.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
                   editText.performAction(AccessibilityNodeInfo.ACTION_CLICK)
 
                   val args = Bundle()
                   args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, replyText)
                   val setOk = editText.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-                  Log.e(TAG, "autoReply: ACTION_SET_TEXT devolvio " + setOk)
+                  Log.e(TAG, "typeAndSend: ACTION_SET_TEXT devolvio " + setOk)
 
                   Thread.sleep(900)
 
-                  val freshRoot = rootInActiveWindow
-                  if (freshRoot == null) {
-                        Log.e(TAG, "autoReply: freshRoot es null despues de escribir")
-                        return false
-                  }
+                  val freshRoot = rootInActiveWindow ?: return false
 
                   val freshEditCandidates = mutableListOf<AccessibilityNodeInfo>()
                   collectEditTexts(freshRoot, freshEditCandidates, 0)
@@ -233,7 +311,6 @@ class TimoAccessibilityService : AccessibilityService() {
 
                   val rowCandidates = mutableListOf<AccessibilityNodeInfo>()
                   collectRowCandidates(freshRoot, freshEditBounds, rowCandidates, 0)
-                  Log.e(TAG, "autoReply: candidatos en la fila: " + rowCandidates.size)
 
                   var sendButton: AccessibilityNodeInfo? = null
                   var bestX = -1
@@ -247,19 +324,15 @@ class TimoAccessibilityService : AccessibilityService() {
                   }
 
                   if (sendButton == null) {
-                        Log.e(TAG, "autoReply: no se encontro boton de enviar con coordenadas validas")
+                        Log.e(TAG, "typeAndSend: no se encontro boton de enviar")
                         return false
                   }
 
-                  val sendBounds = Rect()
-                  sendButton.getBoundsInScreen(sendBounds)
-                  Log.e(TAG, "autoReply: boton enviar elegido en " + sendBounds.toString())
-
                   val clickOk = sendButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                  Log.e(TAG, "autoReply: click en enviar devolvio " + clickOk)
+                  Log.e(TAG, "typeAndSend: click en enviar devolvio " + clickOk)
                   return clickOk
             } catch (e: Exception) {
-                  Log.e(TAG, "EXCEPCION en autoReplyCurrentChat: " + e.toString())
+                  Log.e(TAG, "EXCEPCION en typeAndSend: " + e.toString())
                   return false
             }
       }
