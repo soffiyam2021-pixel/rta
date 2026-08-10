@@ -99,18 +99,18 @@ class FloatingBubbleService : Service() {
             }
 
             override fun onDoubleTap(e: MotionEvent): Boolean {
-                Log.e(TAG, "onDoubleTap: prueba de autoReply")
+                Log.e(TAG, "onDoubleTap: autoReplyWithAI en chat actual")
                 scope.launch {
-                    val ok = TimoAccessibilityService.instance?.autoReplyCurrentChat("Hola")
-                    Log.e(TAG, "resultado prueba autoReply: " + ok)
+                    val ok = TimoAccessibilityService.instance?.autoReplyWithAI()
+                    Log.e(TAG, "resultado autoReplyWithAI: " + ok)
                 }
                 return true
             }
 
             override fun onLongPress(e: MotionEvent) {
-                Log.e(TAG, "onLongPress: prueba de respondToAllUnread")
+                Log.e(TAG, "onLongPress: respondToAllUnread con IA")
                 scope.launch {
-                    TimoAccessibilityService.instance?.respondToAllUnread("Hola")
+                    TimoAccessibilityService.instance?.respondToAllUnread()
                 }
             }
         })
