@@ -18,6 +18,16 @@ class TimoAccessibilityService : AccessibilityService() {
             private const val SCAN_CHANNEL_ID = "auto_reply_scan"
             private var scanNotifId = 8000
             private const val TAG = "AutoReplyDebug"
+            private val KNOWN_UI_LABELS = setOf(
+                  "Saudação à correspondência",
+                  "Video",
+                  "Voz",
+                  "Mensaje oficial",
+                  "En línea",
+                  "Charlamos ayer",
+                  "Solo uno",
+                  "Visibilidad"
+                  )
       }
 
       override fun onServiceConnected() {
@@ -73,7 +83,6 @@ class TimoAccessibilityService : AccessibilityService() {
             return w > 10 && h > 10 && w < 3000 && h < 3000
       }
 
-      /** Responde con IA a todas las conversaciones sin leer visibles en la lista actual. */
       fun respondToAllUnread() {
             try {
                   Log.e(TAG, "respondToAllUnread iniciado")
@@ -128,8 +137,6 @@ class TimoAccessibilityService : AccessibilityService() {
             var best: AccessibilityNodeInfo? = null
             var bestY = Int.MAX_VALUE
             for (badge in badges) {
-                  val b = Rect()
-                  badge.getBoundsInScreen(b)
                   val container = findClickableAncestor(badge, 10)
                   if (container != null) {
                         val cb = Rect()
@@ -170,7 +177,6 @@ class TimoAccessibilityService : AccessibilityService() {
             return null
       }
 
-      /** Version de prueba con texto fijo (se mantiene para diagnostico). */
       fun autoReplyCurrentChat(replyText: String): Boolean {
             val root = rootInActiveWindow ?: return false
             val editText = findBestEditText(root) ?: return false
@@ -179,7 +185,6 @@ class TimoAccessibilityService : AccessibilityService() {
             return typeAndSend(editText, editBounds, replyText)
       }
 
-      /** Lee el ultimo mensaje entrante del chat actual, genera una respuesta con IA y la envia. */
       fun autoReplyWithAI(): Boolean {
             try {
                   Log.e(TAG, "autoReplyWithAI iniciado")
@@ -251,36 +256,45 @@ class TimoAccessibilityService : AccessibilityService() {
             return editText
       }
 
-      /** Busca el texto visible mas cercano al fondo de la pantalla, por encima del cuadro de escritura. */
+      /** Busca el texto de mensaje mas cercano al fondo, excluyendo botones/chips clickeables y etiquetas de UI conocidas. */
       private fun findLatestIncomingMessage(root: AccessibilityNodeInfo, editBounds: Rect): String? {
-            val candidates = mutableListOf<Pair<String, Rect>>()
-            collectMessageTexts(root, candidates, 0)
+            val candidates = mutableListOf<Triple<String, Rect, Boolean>>()
+            collectMessageTexts(root, candidates, 0, false)
 
-            val filtered = candidates.filter { (text, bounds) ->
-                  bounds.top < editBounds.top - 20 &&
+            Log.e(TAG, "findLatestIncomingMessage: candidatos totales=" + candidates.size)
+
+            val filtered = candidates.filter { (text, bounds, clickablePath) ->
+                  val ok = bounds.top < editBounds.top - 20 &&
                   text.length > 1 &&
+                  !clickablePath &&
+                  !KNOWN_UI_LABELS.contains(text) &&
                   !text.matches(Regex("^[0-9]{1,3}$")) &&
                   !text.matches(Regex("^[0-9]{1,2}:[0-9]{2}$")) &&
+                  !text.matches(Regex("^[0-9]{1,2}/[0-9]{1,2}(/[0-9]{2,4})?$")) &&
                   text != "99+"
+                  Log.e(TAG, "findLatestIncomingMessage: candidato '" + text + "' top=" + bounds.top + " clickablePath=" + clickablePath + " ok=" + ok)
+                  ok
             }
 
             val best = filtered.maxByOrNull { it.second.top }
             return best?.first
       }
 
-      private fun collectMessageTexts(node: AccessibilityNodeInfo, found: MutableList<Pair<String, Rect>>, depth: Int) {
+      /** Recorre el arbol acumulando si algun ancestro (o el propio nodo) es clickeable, para descartar chips/botones. */
+      private fun collectMessageTexts(node: AccessibilityNodeInfo, found: MutableList<Triple<String, Rect, Boolean>>, depth: Int, ancestorClickable: Boolean) {
             if (depth > 25) return
+            val isClickablePath = ancestorClickable || node.isClickable
             val text = node.text?.toString()?.trim()
             if (!text.isNullOrBlank()) {
                   val b = Rect()
                   node.getBoundsInScreen(b)
                   if (isValidBounds(b)) {
-                        found.add(Pair(text, b))
+                        found.add(Triple(text, b, isClickablePath))
                   }
             }
             for (i in 0 until node.childCount) {
                   val child = node.getChild(i) ?: continue
-                  collectMessageTexts(child, found, depth + 1)
+                  collectMessageTexts(child, found, depth + 1, isClickablePath)
             }
       }
 
