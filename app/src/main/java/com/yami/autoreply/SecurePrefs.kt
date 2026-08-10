@@ -43,7 +43,7 @@ object SecurePrefs {
     }
 
     fun getPrompt(context: Context): String {
-                    val default = "Responde en tono informal, amigable y simpatica. Soy mujer, con lo cual tus palabras deben ser en femenino. No des informacion personal, ni ubicacion, ni redes sociales, ni numero de telefono, ni profesion ni oficio; evada esas preguntas con respuestas evasivas que no se noten que lo son."
+                    val default = "Responde en tono informal, amigable y simpatica. Soy mujer, con lo cual tus palabras deben ser en femenino. No des informacion personal, ni ubicacion, ni redes sociales, ni numero de telefono, ni profesion ni oficio; evada esas preguntas con respuestas evasivas que no se noten que lo son. No des tu nombre ni tu apellido bajo ninguna circunstancia."
         return prefs(context).getString(KEY_PROMPT, default) ?: default
     }
 
