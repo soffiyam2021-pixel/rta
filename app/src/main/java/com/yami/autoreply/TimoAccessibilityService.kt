@@ -275,6 +275,17 @@ class TimoAccessibilityService : AccessibilityService() {
                   !text.contains("obtendrás", true) &&
                   !text.contains("Responde para ganar", true) &&
                   !text.contains("Al recibir", true) &&
+                  !text.contains("Felicidades", true) &&
+                  !text.contains("llamada de voz", true) &&
+                  !text.contains("videollamada", true) &&
+                  !text.contains("Invite ahora", true) &&
+                  !text.contains("Invitación", true) &&
+                  !text.contains("nivel de intimidad", true) &&
+                  !text.contains("Envíen fotos", true) &&
+                  !text.contains("Enviar fotos", true) &&
+                  !text.contains("desbloquear", true) &&
+                  !text.contains("acercarte más", true) &&
+                  !text.contains("Deseo diario", true) &&
                   !text.matches(Regex("^[0-9]{1,3}$")) &&
                   !text.matches(Regex("^[0-9]{1,2}:[0-9]{2}$")) &&
                   !text.matches(Regex("^[0-9]{1,2}/[0-9]{1,2}(/[0-9]{2,4})?$")) &&
