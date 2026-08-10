@@ -268,6 +268,13 @@ class TimoAccessibilityService : AccessibilityService() {
                   text.length > 1 &&
                   !clickablePath &&
                   !KNOWN_UI_LABELS.contains(text) &&
+                  !text.contains("recompensa", true) &&
+                  !text.contains("diamante", true) &&
+                  !text.contains("encanto", true) &&
+                  !text.contains("cautivado", true) &&
+                  !text.contains("obtendrás", true) &&
+                  !text.contains("Responde para ganar", true) &&
+                  !text.contains("Al recibir", true) &&
                   !text.matches(Regex("^[0-9]{1,3}$")) &&
                   !text.matches(Regex("^[0-9]{1,2}:[0-9]{2}$")) &&
                   !text.matches(Regex("^[0-9]{1,2}/[0-9]{1,2}(/[0-9]{2,4})?$")) &&
