@@ -1,4 +1,4 @@
-package com.yami.autoreply
+çãàêíáóíáúêúpackage com.yami.autoreply
 
 import android.accessibilityservice.AccessibilityService
 import android.app.NotificationChannel
