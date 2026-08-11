@@ -93,8 +93,10 @@ class FloatingBubbleService : Service() {
 
         val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                Log.e(TAG, "onSingleTapConfirmed: escaneo")
-                TimoAccessibilityService.instance?.scanAndNotify()
+                Log.e(TAG, "onSingleTapConfirmed: respondToAllUnread (flujo principal)")
+                scope.launch {
+                    TimoAccessibilityService.instance?.respondToAllUnread()
+                }
                 return true
             }
 
@@ -108,10 +110,8 @@ class FloatingBubbleService : Service() {
             }
 
             override fun onLongPress(e: MotionEvent) {
-                Log.e(TAG, "onLongPress: respondToAllUnread con IA")
-                scope.launch {
-                    TimoAccessibilityService.instance?.respondToAllUnread()
-                }
+                Log.e(TAG, "onLongPress: escaneo de diagnostico")
+                TimoAccessibilityService.instance?.scanAndNotify()
             }
         })
 
