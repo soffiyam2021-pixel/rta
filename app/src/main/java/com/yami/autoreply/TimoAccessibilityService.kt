@@ -18,6 +18,8 @@ class TimoAccessibilityService : AccessibilityService() {
             private const val SCAN_CHANNEL_ID = "auto_reply_scan"
             private var scanNotifId = 8000
             private const val TAG = "AutoReplyDebug"
+            private const val MAX_UNREAD_PER_RUN = 30
+            private const val HEADER_ZONE_TOP = 350
             private val KNOWN_UI_LABELS = setOf(
                   "Saudação à correspondência",
                   "Video",
@@ -116,7 +118,7 @@ class TimoAccessibilityService : AccessibilityService() {
                   Log.e(TAG, "respondToAllUnread iniciado")
                   var attempts = 0
                   var repliedCount = 0
-                  while (attempts < 10) {
+                  while (attempts < MAX_UNREAD_PER_RUN) {
                         attempts++
                         val root = rootInActiveWindow
                         if (root == null) {
@@ -150,7 +152,7 @@ class TimoAccessibilityService : AccessibilityService() {
                         performGlobalAction(GLOBAL_ACTION_BACK)
                         Thread.sleep(1000)
                   }
-                  Log.e(TAG, "respondToAllUnread: termino, respondidas=" + repliedCount)
+                  Log.e(TAG, "respondToAllUnread: termino, respondidas=" + repliedCount + " intentos=" + attempts)
                   showScanNotification("Respuestas automaticas", "Se respondieron " + repliedCount + " conversaciones sin leer.")
             } catch (e: Exception) {
                   Log.e(TAG, "EXCEPCION en respondToAllUnread: " + e.toString())
@@ -302,6 +304,7 @@ class TimoAccessibilityService : AccessibilityService() {
              val filtered = candidates.filter { (text, bounds) ->
                    val isBlocked = KEYWORD_BLOCKLIST.any { kw -> text.contains(kw, ignoreCase = true) }
                    val ok = bounds.top < editBounds.top - 20 &&
+                   bounds.top > HEADER_ZONE_TOP &&
                    text.length > 1 &&
                    !KNOWN_UI_LABELS.contains(text) &&
                    !isBlocked &&
