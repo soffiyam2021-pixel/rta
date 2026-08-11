@@ -299,7 +299,7 @@ class TimoAccessibilityService : AccessibilityService() {
                     !text.matches(Regex("^[0-9]{1,3}$")) &&
                     !text.matches(Regex("^[0-9]{1,2}:[0-9]{2}$")) &&
                     !text.matches(Regex("^[0-9]{1,2}/[0-9]{1,2}.*$")) &&
-                    !text.matches(Regex("^[0-9]{1,3}%.*$")) &&
+                !text.replace(Regex("[\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069]"), "").trim().matches(Regex("^[0-9]{1,3}%.*$")) &&
                     !text.matches(Regex("^[0-9]+(\\.[0-9]+)?\\s*(℃|°C)?$")) &&
                     text != "99+"
                     Log.e(TAG, "findLatestIncomingMessage: candidato '" + text + "' top=" + bounds.top + " ok=" + ok)
