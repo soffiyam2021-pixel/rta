@@ -24,7 +24,7 @@ class ReplyNotificationListener : NotificationListenerService() {
         private const val TAG = "AutoReplyListener"
         private const val DEBUG_CHANNEL_ID = "auto_reply_debug"
         private var debugNotifId = 5000
-        private const val TIMO_PACKAGE = "com.hwsj.chat"
+        private val TIMO_PACKAGES = setOf("com.hwsj.chat", "com.hwsj.club")
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -32,10 +32,10 @@ class ReplyNotificationListener : NotificationListenerService() {
 
         if (!SecurePrefs.isActive(applicationContext)) return
 
-        /** Restringido unicamente a Timo. Este listener puede recibir notificaciones de
-         * cualquier app instalada; se limita expresamente a Timo para evitar responder
+        /** Restringido unicamente a Timo y Timo Club. Este listener puede recibir notificaciones
+         * de cualquier app instalada; se limita expresamente a estas dos para evitar responder
           * mensajes de Gmail, WhatsApp u otras apps por error. */
-        if (sbn.packageName != TIMO_PACKAGE) return
+        if (!TIMO_PACKAGES.contains(sbn.packageName)) return
 
         val appName = appLabelForPackage(sbn.packageName)
 
