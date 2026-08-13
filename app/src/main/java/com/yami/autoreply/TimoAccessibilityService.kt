@@ -405,31 +405,79 @@ class TimoAccessibilityService : AccessibilityService() {
             return editText.text?.toString()
       }
 
-      /** Toca la pantalla en un punto exacto, simulando un toque real con el dedo. Se usa
-       * para tocar el boton de enviar por coordenadas en vez de adivinar cual nodo del
-        * arbol de accesibilidad es el correcto (mas confiable cuando hay varios botones
-         * parecidos cerca, como en usuarios nuevos o mensajes largos). */
-         private fun tapAt(x: Int, y: Int): Boolean {
-               try {
-                     val path = Path()
-                     path.moveTo(x.toFloat(), y.toFloat())
-                     val gestureBuilder = GestureDescription.Builder()
-                     val stroke = GestureDescription.StrokeDescription(path, 0, 80)
-                     gestureBuilder.addStroke(stroke)
-                     val dispatched = dispatchGesture(gestureBuilder.build(), null, null)
-                     Log.e(TAG, "tapAt: toque en (" + x + "," + y + ") dispatchGesture devolvio " + dispatched)
-                     return dispatched
-               } catch (e: Exception) {
-                     Log.e(TAG, "EXCEPCION en tapAt: " + e.toString())
-                     return false
-               }
-         }
+      private fun tapAt(x: Int, y: Int): Boolean {
+            try {
+                  val path = Path()
+                  path.moveTo(x.toFloat(), y.toFloat())
+                  val gestureBuilder = GestureDescription.Builder()
+                  val stroke = GestureDescription.StrokeDescription(path, 0, 80)
+                  gestureBuilder.addStroke(stroke)
+                  val dispatched = dispatchGesture(gestureBuilder.build(), null, null)
+                  Log.e(TAG, "tapAt: toque en (" + x + "," + y + ") dispatchGesture devolvio " + dispatched)
+                  return dispatched
+            } catch (e: Exception) {
+                  Log.e(TAG, "EXCEPCION en tapAt: " + e.toString())
+                  return false
+            }
+      }
 
-         /** Escribe el texto y toca el boton de enviar por coordenadas, apuntando al borde
-          * derecho de la pantalla y a la parte inferior del cuadro de texto (donde esta el
-           * icono de enviar en Timo, sin importar si el cuadro crecio por un mensaje largo).
-            * Un solo intento: no se prueban otros botones para evitar tocar regalos, llamadas
-             * u otras funciones por error. */
+      /** Un boton "en la fila" del EditText es aquel que se superpone verticalmente con el
+       * cuadro de texto actual (con margen de tolerancia), sin importar cuanto haya crecido
+        * o subido por el teclado. */
+        private fun collectRowCandidates(node: AccessibilityNodeInfo, editBounds: Rect, candidates: MutableList<AccessibilityNodeInfo>, depth: Int) {
+              if (depth > 25) return
+              if (node.isClickable) {
+                    val b = Rect()
+                    node.getBoundsInScreen(b)
+                    val tolerance = 40
+                    val overlapsVertically = b.bottom >= editBounds.top - tolerance && b.top <= editBounds.bottom + tolerance
+                    val notEditTextItself = !(node.className?.toString() ?: "").contains("EditText")
+                    val notTooWide = b.width() < editBounds.width()
+                    if (overlapsVertically && notEditTextItself && notTooWide) {
+                          candidates.add(node)
+                    }
+              }
+              for (i in 0 until node.childCount) {
+                    val child = node.getChild(i) ?: continue
+                    collectRowCandidates(child, editBounds, candidates, depth + 1)
+              }
+        }
+
+        /** Busca el boton de enviar real en el arbol de accesibilidad (el mas cercano al borde
+         * derecho de la pantalla) y devuelve sus coordenadas reales actuales, ya con el teclado
+          * arriba si esta abierto. No se inventa ningun desplazamiento manual. */
+          private fun findSendButtonCenter(root: AccessibilityNodeInfo, editBounds: Rect): Pair<Int, Int>? {
+                val screenBounds = Rect()
+                root.getBoundsInScreen(screenBounds)
+                val screenRight = screenBounds.right
+
+                val rowCandidates = mutableListOf<AccessibilityNodeInfo>()
+                collectRowCandidates(root, editBounds, rowCandidates, 0)
+
+                var best: AccessibilityNodeInfo? = null
+                var bestDistance = Int.MAX_VALUE
+                for (node in rowCandidates) {
+                      val b = Rect()
+                      node.getBoundsInScreen(b)
+                      if (!isValidBounds(b)) continue
+                      val distance = screenRight - b.right
+                      Log.e(TAG, "findSendButtonCenter: candidato " + b.toString() + " distancia al borde=" + distance)
+                      if (distance < bestDistance) {
+                            bestDistance = distance
+                            best = node
+                      }
+                }
+
+                if (best == null) return null
+                val b = Rect()
+                best.getBoundsInScreen(b)
+                return Pair(b.centerX(), b.centerY())
+          }
+
+          /** Escribe el texto, espera a que el teclado termine de subir, busca el boton de enviar
+           * en el arbol de accesibilidad (el mas cercano al borde derecho) y toca sus coordenadas
+            * reales. Un solo intento: no se prueban otros botones para evitar tocar regalos,
+             * llamadas u otras funciones por error. */
              private fun typeAndSend(editText: AccessibilityNodeInfo, editBounds: Rect, replyText: String): Boolean {
                    try {
                          editText.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
@@ -440,7 +488,7 @@ class TimoAccessibilityService : AccessibilityService() {
                          val setOk = editText.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
                          Log.e(TAG, "typeAndSend: ACTION_SET_TEXT devolvio " + setOk)
 
-                         Thread.sleep(1000)
+                         Thread.sleep(1600)
 
                          val freshRoot = rootInActiveWindow ?: return false
                          val freshEditCandidates = mutableListOf<AccessibilityNodeInfo>()
@@ -453,16 +501,16 @@ class TimoAccessibilityService : AccessibilityService() {
                                      freshEditBounds = b
                                }
                          }
-                         Log.e(TAG, "typeAndSend: cuadro de texto actual " + freshEditBounds.toString())
+                         Log.e(TAG, "typeAndSend: cuadro de texto actual (con teclado si esta abierto) " + freshEditBounds.toString())
 
-                         val screenBounds = Rect()
-                         freshRoot.getBoundsInScreen(screenBounds)
+                         val sendCenter = findSendButtonCenter(freshRoot, freshEditBounds)
+                         if (sendCenter == null) {
+                               Log.e(TAG, "typeAndSend: no se encontro boton de enviar")
+                               return false
+                         }
+                         Log.e(TAG, "typeAndSend: tocando boton de enviar en " + sendCenter.toString())
 
-                         val tapX = (screenBounds.right - 45).coerceAtLeast(screenBounds.left)
-                         val tapY = (freshEditBounds.bottom - 40).coerceIn(freshEditBounds.top, freshEditBounds.bottom)
-                         Log.e(TAG, "typeAndSend: tocando en (" + tapX + "," + tapY + ")")
-
-                         tapAt(tapX, tapY)
+                         tapAt(sendCenter.first, sendCenter.second)
                          Thread.sleep(900)
 
                          val remaining = currentEditTextContent()
