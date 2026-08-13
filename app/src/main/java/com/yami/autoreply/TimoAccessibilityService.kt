@@ -21,9 +21,10 @@ class TimoAccessibilityService : AccessibilityService() {
             private const val MAX_UNREAD_PER_RUN = 30
             private const val HEADER_ZONE_TOP = 350
             private const val TIMO_PACKAGE = "com.hwsj.chat"
-            private const val AUTO_CHECK_COOLDOWN_MS = 4000L
+            private const val AUTO_CHECK_COOLDOWN_MS = 3000L
             @Volatile private var isProcessing = false
             @Volatile private var lastAutoCheckTime = 0L
+            @Volatile private var eventCounter = 0
             private val KNOWN_UI_LABELS = setOf(
                   "Saudação à correspondência",
                   "Video",
@@ -75,281 +76,293 @@ class TimoAccessibilityService : AccessibilityService() {
             instance = null
       }
 
-      override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-            try {
-                  val pkg = event?.packageName?.toString() ?: return
-                  if (pkg != TIMO_PACKAGE) return
-                  if (isProcessing) return
+      /** Detecta cambios de pantalla mientras Timo esta abierto, para disparar respuestas
+       * automaticas sin necesidad de tocar la burbuja. Con logging detallado para diagnostico. */
+       override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+             try {
+                   val pkg = event?.packageName?.toString()
+                   if (pkg != TIMO_PACKAGE) return
 
-                  val now = System.currentTimeMillis()
-                  if (now - lastAutoCheckTime < AUTO_CHECK_COOLDOWN_MS) return
-                  lastAutoCheckTime = now
+                   eventCounter++
+                   if (eventCounter % 20 == 0) {
+                         Log.e(TAG, "onAccessibilityEvent: recibidos " + eventCounter + " eventos de Timo, tipo=" + event?.eventType + " isProcessing=" + isProcessing)
+                   }
 
-                  val root = rootInActiveWindow ?: return
-                  val hasUnread = findFirstUnreadRow(root) != null
-                  if (!hasUnread) return
+                   if (isProcessing) return
 
-                  Log.e(TAG, "onAccessibilityEvent: mensajes sin leer detectados con Timo abierto, disparando respuesta automatica")
-                  Thread {
-                        respondToAllUnread()
-                  }.start()
-            } catch (e: Exception) {
-                  Log.e(TAG, "EXCEPCION en onAccessibilityEvent: " + e.toString())
-            }
-      }
+                   val now = System.currentTimeMillis()
+                   val sinceLast = now - lastAutoCheckTime
+                   if (sinceLast < AUTO_CHECK_COOLDOWN_MS) return
+                   lastAutoCheckTime = now
 
-      override fun onInterrupt() {}
+                   val root = rootInActiveWindow
+                   if (root == null) {
+                         Log.e(TAG, "onAccessibilityEvent: root es null, no puedo chequear")
+                         return
+                   }
+                   val unreadRow = findFirstUnreadRow(root)
+                   if (unreadRow == null) {
+                         return
+                   }
 
-      fun scanAndNotify() {
-            try {
-                  val root = rootInActiveWindow
-                  if (root == null) {
-                        showScanNotification("Escaneo fallo", "No se pudo leer la pantalla actual.")
-                        return
-                  }
-                  val found = mutableListOf<String>()
-                  collectNodes(root, found, depth = 0)
-                  if (found.isEmpty()) {
-                        showScanNotification("Escaneo vacio", "No se encontraron elementos con texto o clickeables en esta pantalla.")
-                        return
-                  }
-                  val chunks = mutableListOf<StringBuilder>()
-                  var current = StringBuilder()
-                  for (line in found) {
-                        if (current.length + line.length > 700) {
-                              chunks.add(current)
-                              current = StringBuilder()
-                        }
-                        current.append(line).append("\n")
-                  }
-                  if (current.isNotEmpty()) chunks.add(current)
-                  chunks.forEachIndexed { index, chunk ->
-                        showScanNotification("Escaneo (${index + 1}/${chunks.size})", chunk.toString())
-                  }
-            } catch (e: Exception) {
-                  Log.e(TAG, "EXCEPCION en scanAndNotify: " + e.toString())
-            }
-      }
+                   Log.e(TAG, "onAccessibilityEvent: mensajes sin leer detectados con Timo abierto (evento tipo=" + event?.eventType + "), disparando respuesta automatica")
+                   Thread {
+                         respondToAllUnread()
+                   }.start()
+             } catch (e: Exception) {
+                   Log.e(TAG, "EXCEPCION en onAccessibilityEvent: " + e.toString())
+             }
+       }
 
-      private fun isValidBounds(b: Rect): Boolean {
-            val w = b.width()
-            val h = b.height()
-            return w > 10 && h > 10 && w < 3000 && h < 3000
-      }
+       override fun onInterrupt() {}
 
-      /** Chequea si seguimos dentro de una conversacion (hay un cuadro de texto para escribir). */
-      private fun isStillInChat(): Boolean {
-            val root = rootInActiveWindow ?: return false
-            return findBestEditText(root) != null
-      }
+       fun scanAndNotify() {
+             try {
+                   val root = rootInActiveWindow
+                   if (root == null) {
+                         showScanNotification("Escaneo fallo", "No se pudo leer la pantalla actual.")
+                         return
+                   }
+                   val found = mutableListOf<String>()
+                   collectNodes(root, found, depth = 0)
+                   if (found.isEmpty()) {
+                         showScanNotification("Escaneo vacio", "No se encontraron elementos con texto o clickeables en esta pantalla.")
+                         return
+                   }
+                   val chunks = mutableListOf<StringBuilder>()
+                   var current = StringBuilder()
+                   for (line in found) {
+                         if (current.length + line.length > 700) {
+                               chunks.add(current)
+                               current = StringBuilder()
+                         }
+                         current.append(line).append("\n")
+                   }
+                   if (current.isNotEmpty()) chunks.add(current)
+                   chunks.forEachIndexed { index, chunk ->
+                         showScanNotification("Escaneo (${index + 1}/${chunks.size})", chunk.toString())
+                   }
+             } catch (e: Exception) {
+                   Log.e(TAG, "EXCEPCION en scanAndNotify: " + e.toString())
+             }
+       }
 
-      fun respondToAllUnread() {
-            if (isProcessing) {
-                  Log.e(TAG, "respondToAllUnread: ya hay un proceso en curso, se ignora")
-                  return
-            }
-            isProcessing = true
-            try {
-                  Log.e(TAG, "respondToAllUnread iniciado")
-                  var attempts = 0
-                  var repliedCount = 0
-                  while (attempts < MAX_UNREAD_PER_RUN) {
-                        attempts++
-                        val root = rootInActiveWindow
-                        if (root == null) {
-                              Log.e(TAG, "respondToAllUnread: root es null, freno")
-                              break
-                        }
+       private fun isValidBounds(b: Rect): Boolean {
+             val w = b.width()
+             val h = b.height()
+             return w > 10 && h > 10 && w < 3000 && h < 3000
+       }
 
-                        val unreadRow = findFirstUnreadRow(root)
-                        if (unreadRow == null) {
-                              Log.e(TAG, "respondToAllUnread: no hay mas conversaciones sin leer visibles")
-                              break
-                        }
+       private fun isStillInChat(): Boolean {
+             val root = rootInActiveWindow ?: return false
+             return findBestEditText(root) != null
+       }
 
-                        val rowBounds = Rect()
-                        unreadRow.getBoundsInScreen(rowBounds)
-                        Log.e(TAG, "respondToAllUnread: abriendo fila en " + rowBounds.toString())
+       fun respondToAllUnread() {
+             if (isProcessing) {
+                   Log.e(TAG, "respondToAllUnread: ya hay un proceso en curso, se ignora")
+                   return
+             }
+             isProcessing = true
+             try {
+                   Log.e(TAG, "respondToAllUnread iniciado")
+                   var attempts = 0
+                   var repliedCount = 0
+                   while (attempts < MAX_UNREAD_PER_RUN) {
+                         attempts++
+                         val root = rootInActiveWindow
+                         if (root == null) {
+                               Log.e(TAG, "respondToAllUnread: root es null, freno")
+                               break
+                         }
 
-                        val clickOk = unreadRow.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                        Log.e(TAG, "respondToAllUnread: click en fila devolvio " + clickOk)
-                        if (!clickOk) break
+                         val unreadRow = findFirstUnreadRow(root)
+                         if (unreadRow == null) {
+                               Log.e(TAG, "respondToAllUnread: no hay mas conversaciones sin leer visibles")
+                               break
+                         }
 
-                        Thread.sleep(1200)
+                         val rowBounds = Rect()
+                         unreadRow.getBoundsInScreen(rowBounds)
+                         Log.e(TAG, "respondToAllUnread: abriendo fila en " + rowBounds.toString())
 
-                        val sent = autoReplyWithAI()
-                        Log.e(TAG, "respondToAllUnread: autoReplyWithAI devolvio " + sent)
-                        if (sent) repliedCount++
+                         val clickOk = unreadRow.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                         Log.e(TAG, "respondToAllUnread: click en fila devolvio " + clickOk)
+                         if (!clickOk) break
 
-                        Thread.sleep(500)
-                        performGlobalAction(GLOBAL_ACTION_BACK)
-                        Thread.sleep(700)
-                        if (isStillInChat()) {
-                              Log.e(TAG, "respondToAllUnread: seguia en el chat, segundo atras")
-                              performGlobalAction(GLOBAL_ACTION_BACK)
-                              Thread.sleep(1000)
-                        } else {
-                              Log.e(TAG, "respondToAllUnread: ya estaba en la lista, no hace falta segundo atras")
-                              Thread.sleep(300)
-                        }
-                  }
-                  Log.e(TAG, "respondToAllUnread: termino, respondidas=" + repliedCount + " intentos=" + attempts)
-                  showScanNotification("Respuestas automaticas", "Se respondieron " + repliedCount + " conversaciones sin leer.")
-            } catch (e: Exception) {
-                  Log.e(TAG, "EXCEPCION en respondToAllUnread: " + e.toString())
-            } finally {
-                  lastAutoCheckTime = System.currentTimeMillis()
-                  isProcessing = false
-            }
-      }
+                         Thread.sleep(1200)
 
-      private fun findFirstUnreadRow(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-            val badges = mutableListOf<AccessibilityNodeInfo>()
-            collectUnreadBadges(root, badges, 0)
+                         val sent = autoReplyWithAI()
+                         Log.e(TAG, "respondToAllUnread: autoReplyWithAI devolvio " + sent)
+                         if (sent) repliedCount++
 
-            var best: AccessibilityNodeInfo? = null
-            var bestY = Int.MAX_VALUE
-            for (badge in badges) {
-                  val container = findClickableAncestor(badge, 10)
-                  if (container != null) {
-                        val cb = Rect()
-                        container.getBoundsInScreen(cb)
-                        if (isValidBounds(cb) && cb.height() > 100 && cb.width() > 300 && cb.top < bestY) {
-                              bestY = cb.top
-                              best = container
-                        }
-                  }
-            }
-            return best
-      }
+                         Thread.sleep(500)
+                         performGlobalAction(GLOBAL_ACTION_BACK)
+                         Thread.sleep(700)
+                         if (isStillInChat()) {
+                               performGlobalAction(GLOBAL_ACTION_BACK)
+                               Thread.sleep(1000)
+                         } else {
+                               Thread.sleep(300)
+                         }
+                   }
+                   Log.e(TAG, "respondToAllUnread: termino, respondidas=" + repliedCount + " intentos=" + attempts)
+                   if (attempts >= MAX_UNREAD_PER_RUN) {
+                         Log.e(TAG, "respondToAllUnread: se alcanzo el limite de " + MAX_UNREAD_PER_RUN + ", puede haber mas pendientes")
+                   }
+                   showScanNotification("Respuestas automaticas", "Se respondieron " + repliedCount + " conversaciones sin leer.")
+             } catch (e: Exception) {
+                   Log.e(TAG, "EXCEPCION en respondToAllUnread: " + e.toString())
+             } finally {
+                   lastAutoCheckTime = System.currentTimeMillis()
+                   isProcessing = false
+             }
+       }
 
-      private fun collectUnreadBadges(node: AccessibilityNodeInfo, found: MutableList<AccessibilityNodeInfo>, depth: Int) {
-            if (depth > 25) return
-            val text = node.text?.toString()?.trim()
-            if (!text.isNullOrBlank() && (text.matches(Regex("^[0-9]{1,3}$")) || text == "99+")) {
-                  val b = Rect()
-                  node.getBoundsInScreen(b)
-                  if (isValidBounds(b) && b.width() < 60 && b.height() < 60 && b.left < 250) {
-                        found.add(node)
-                  }
-            }
-            for (i in 0 until node.childCount) {
-                  val child = node.getChild(i) ?: continue
-                  collectUnreadBadges(child, found, depth + 1)
-            }
-      }
+       private fun findFirstUnreadRow(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+             val badges = mutableListOf<AccessibilityNodeInfo>()
+             collectUnreadBadges(root, badges, 0)
 
-      private fun findClickableAncestor(node: AccessibilityNodeInfo, maxUp: Int): AccessibilityNodeInfo? {
-            var current: AccessibilityNodeInfo? = node
-            var steps = 0
-            while (current != null && steps < maxUp) {
-                  if (current.isClickable) return current
-                  current = current.parent
-                  steps++
-            }
-            return null
-      }
+             var best: AccessibilityNodeInfo? = null
+             var bestY = Int.MAX_VALUE
+             for (badge in badges) {
+                   val container = findClickableAncestor(badge, 10)
+                   if (container != null) {
+                         val cb = Rect()
+                         container.getBoundsInScreen(cb)
+                         if (isValidBounds(cb) && cb.height() > 100 && cb.width() > 300 && cb.top < bestY) {
+                               bestY = cb.top
+                               best = container
+                         }
+                   }
+             }
+             return best
+       }
 
-      fun autoReplyCurrentChat(replyText: String): Boolean {
-            val root = rootInActiveWindow ?: return false
-            val editText = findBestEditText(root) ?: return false
-            val editBounds = Rect()
-            editText.getBoundsInScreen(editBounds)
-            return typeAndSend(editText, editBounds, replyText)
-      }
+       private fun collectUnreadBadges(node: AccessibilityNodeInfo, found: MutableList<AccessibilityNodeInfo>, depth: Int) {
+             if (depth > 25) return
+             val text = node.text?.toString()?.trim()
+             if (!text.isNullOrBlank() && (text.matches(Regex("^[0-9]{1,3}$")) || text == "99+")) {
+                   val b = Rect()
+                   node.getBoundsInScreen(b)
+                   if (isValidBounds(b) && b.width() < 60 && b.height() < 60 && b.left < 250) {
+                         found.add(node)
+                   }
+             }
+             for (i in 0 until node.childCount) {
+                   val child = node.getChild(i) ?: continue
+                   collectUnreadBadges(child, found, depth + 1)
+             }
+       }
 
-      fun autoReplyWithAI(): Boolean {
-            try {
-                  Log.e(TAG, "autoReplyWithAI iniciado")
-                  val root = rootInActiveWindow
-                  if (root == null) {
-                        Log.e(TAG, "autoReplyWithAI: root es null")
-                        return false
-                  }
+       private fun findClickableAncestor(node: AccessibilityNodeInfo, maxUp: Int): AccessibilityNodeInfo? {
+             var current: AccessibilityNodeInfo? = node
+             var steps = 0
+             while (current != null && steps < maxUp) {
+                   if (current.isClickable) return current
+                   current = current.parent
+                   steps++
+             }
+             return null
+       }
 
-                  val editText = findBestEditText(root)
-                  if (editText == null) {
-                        Log.e(TAG, "autoReplyWithAI: ningun EditText con coordenadas validas")
-                        return false
-                  }
-                  val editBounds = Rect()
-                  editText.getBoundsInScreen(editBounds)
+       fun autoReplyCurrentChat(replyText: String): Boolean {
+             val root = rootInActiveWindow ?: return false
+             val editText = findBestEditText(root) ?: return false
+             val editBounds = Rect()
+             editText.getBoundsInScreen(editBounds)
+             return typeAndSend(editText, editBounds, replyText)
+       }
 
-                  val incomingMessage = findLatestIncomingMessage(root, editBounds)
-                  Log.e(TAG, "autoReplyWithAI: mensaje entrante detectado: " + incomingMessage)
+       fun autoReplyWithAI(): Boolean {
+             try {
+                   Log.e(TAG, "autoReplyWithAI iniciado")
+                   val root = rootInActiveWindow
+                   if (root == null) {
+                         Log.e(TAG, "autoReplyWithAI: root es null")
+                         return false
+                   }
 
-                  if (incomingMessage.isNullOrBlank()) {
-                        Log.e(TAG, "autoReplyWithAI: no se detecto mensaje entrante, cancelando")
-                        return false
-                  }
+                   val editText = findBestEditText(root)
+                   if (editText == null) {
+                         Log.e(TAG, "autoReplyWithAI: ningun EditText con coordenadas validas")
+                         return false
+                   }
+                   val editBounds = Rect()
+                   editText.getBoundsInScreen(editBounds)
 
-                  val apiKeys = SecurePrefs.getApiKeysList(applicationContext)
-                  val userInstructions = SecurePrefs.getPrompt(applicationContext)
+                   val incomingMessage = findLatestIncomingMessage(root, editBounds)
+                   Log.e(TAG, "autoReplyWithAI: mensaje entrante detectado: " + incomingMessage)
 
-                  val result = ClaudeApiClient.generateReply(
-                        apiKeys,
-                        "Timo",
-                        "",
-                        incomingMessage,
-                        userInstructions
-                        )
+                   if (incomingMessage.isNullOrBlank()) {
+                         Log.e(TAG, "autoReplyWithAI: no se detecto mensaje entrante, cancelando")
+                         return false
+                   }
 
-                  val replyText: String
-                  when (result) {
-                        is ReplyResult.Success -> {
-                              replyText = result.text
-                              Log.e(TAG, "autoReplyWithAI: IA genero: " + replyText)
-                        }
-                        is ReplyResult.Error -> {
-                              Log.e(TAG, "autoReplyWithAI: error de IA: " + result.message)
-                              return false
-                        }
-                  }
+                   val apiKeys = SecurePrefs.getApiKeysList(applicationContext)
+                   val userInstructions = SecurePrefs.getPrompt(applicationContext)
 
-                  return typeAndSend(editText, editBounds, replyText)
-            } catch (e: Exception) {
-                  Log.e(TAG, "EXCEPCION en autoReplyWithAI: " + e.toString())
-                  return false
-            }
-      }
+                   val result = ClaudeApiClient.generateReply(
+                         apiKeys,
+                         "Timo",
+                         "",
+                         incomingMessage,
+                         userInstructions
+                         )
 
-      private fun findBestEditText(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-            val editCandidates = mutableListOf<AccessibilityNodeInfo>()
-            collectEditTexts(root, editCandidates, 0)
-            var editText: AccessibilityNodeInfo? = null
-            var bestY = -1
-            for (c in editCandidates) {
-                  val b = Rect()
-                  c.getBoundsInScreen(b)
-                  if (isValidBounds(b) && b.bottom > bestY) {
-                        bestY = b.bottom
-                        editText = c
-                  }
-            }
-            return editText
-      }
+                   val replyText: String
+                   when (result) {
+                         is ReplyResult.Success -> {
+                               replyText = result.text
+                               Log.e(TAG, "autoReplyWithAI: IA genero: " + replyText)
+                         }
+                         is ReplyResult.Error -> {
+                               Log.e(TAG, "autoReplyWithAI: error de IA: " + result.message)
+                               return false
+                         }
+                   }
 
-      /** Detecta si el texto contiene al menos un emoji (rangos Unicode habituales de emoji). */
-      private fun hasEmoji(text: String): Boolean {
-            var i = 0
-            while (i < text.length) {
-                  val codePoint = text.codePointAt(i)
-                  if (
-                        (codePoint in 0x1F300..0x1FAFF) ||
-                              (codePoint in 0x2600..0x27BF) ||
-                              (codePoint in 0x2190..0x21FF) ||
-                              (codePoint in 0x2B00..0x2BFF) ||
-                              (codePoint in 0x1F1E6..0x1F1FF)
-                              ) {
-                        return true
-                  }
-                  i += Character.charCount(codePoint)
-            }
-            return false
-      }
+                   return typeAndSend(editText, editBounds, replyText)
+             } catch (e: Exception) {
+                   Log.e(TAG, "EXCEPCION en autoReplyWithAI: " + e.toString())
+                   return false
+             }
+       }
 
-      /** Un mensaje real de chat tiene al menos una letra o un emoji. Textos compuestos solo por
-       * numeros, simbolos, marcadores de imagen, fechas, horas, porcentajes, etc. se descartan. */
+       private fun findBestEditText(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+             val editCandidates = mutableListOf<AccessibilityNodeInfo>()
+             collectEditTexts(root, editCandidates, 0)
+             var editText: AccessibilityNodeInfo? = null
+             var bestY = -1
+             for (c in editCandidates) {
+                   val b = Rect()
+                   c.getBoundsInScreen(b)
+                   if (isValidBounds(b) && b.bottom > bestY) {
+                         bestY = b.bottom
+                         editText = c
+                   }
+             }
+             return editText
+       }
+
+       private fun hasEmoji(text: String): Boolean {
+             var i = 0
+             while (i < text.length) {
+                   val codePoint = text.codePointAt(i)
+                   if (
+                         (codePoint in 0x1F300..0x1FAFF) ||
+                               (codePoint in 0x2600..0x27BF) ||
+                               (codePoint in 0x2190..0x21FF) ||
+                               (codePoint in 0x2B00..0x2BFF) ||
+                               (codePoint in 0x1F1E6..0x1F1FF)
+                               ) {
+                         return true
+                   }
+                   i += Character.charCount(codePoint)
+             }
+             return false
+       }
+
        private fun looksLikeNoise(text: String): Boolean {
              val hasLetter = text.any { it.isLetter() }
              if (hasLetter) return false
