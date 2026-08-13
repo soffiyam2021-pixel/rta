@@ -403,170 +403,171 @@ class TimoAccessibilityService : AccessibilityService() {
             return editText.text?.toString()
       }
 
-      /** Devuelve candidatos de "boton de enviar" en la fila del EditText, ordenados del mas
-       * probable al menos probable. Prioriza botones chicos (tipicos de un icono de enviar)
-        * cerca del borde derecho de la pantalla, para no confundirlos con botones mas grandes
-         * de regalo, llamada o video que a veces aparecen para usuarios nuevos o mensajes largos. */
-         private fun sendButtonCandidatesOrdered(root: AccessibilityNodeInfo, editBounds: Rect): List<AccessibilityNodeInfo> {
-               val rowCandidates = mutableListOf<AccessibilityNodeInfo>()
-               collectRowCandidates(root, editBounds, rowCandidates, 0)
+      /** Devuelve candidatos de "boton de enviar" en la fila del EditText, ordenados por
+       * cercania al borde derecho de la pantalla (el boton real esta pegado al borde derecho). */
+       private fun sendButtonCandidatesOrdered(root: AccessibilityNodeInfo, editBounds: Rect): List<AccessibilityNodeInfo> {
+             val screenBounds = Rect()
+             root.getBoundsInScreen(screenBounds)
+             val screenRight = screenBounds.right
 
-               val scored = rowCandidates.mapNotNull { node ->
-                     val b = Rect()
-                     node.getBoundsInScreen(b)
-                     if (!isValidBounds(b)) return@mapNotNull null
-                     val w = b.width()
-                     val h = b.height()
-                     val looksLikeIcon = w in 40..170 && h in 40..170
-                     if (!looksLikeIcon) return@mapNotNull null
-                     Pair(node, b.centerX())
-               }
+             val rowCandidates = mutableListOf<AccessibilityNodeInfo>()
+             collectRowCandidates(root, editBounds, rowCandidates, 0)
 
-               return scored.sortedByDescending { it.second }.map { it.first }
-         }
+             val scored = rowCandidates.mapNotNull { node ->
+                   val b = Rect()
+                   node.getBoundsInScreen(b)
+                   if (!isValidBounds(b)) return@mapNotNull null
+                   val distanceFromRightEdge = screenRight - b.right
+                   Log.e(TAG, "sendButtonCandidatesOrdered: candidato " + b.toString() + " distancia al borde=" + distanceFromRightEdge)
+                   Pair(node, distanceFromRightEdge)
+             }
 
-         private fun clickCandidate(node: AccessibilityNodeInfo): Boolean {
-               val b = Rect()
-               node.getBoundsInScreen(b)
-               Log.e(TAG, "clickCandidate: intentando " + b.toString())
-               val clickOk = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-               Log.e(TAG, "clickCandidate: click devolvio " + clickOk)
-               return clickOk
-         }
+             return scored.sortedBy { it.second }.map { it.first }
+       }
 
-         /** Escribe el texto y busca el boton de enviar en la fila, probando distintos candidatos
-          * (de derecha a izquierda, filtrados por tamano de icono) si alguno no funciona, hasta
-           * 3 intentos. Verifica el envio chequeando si el cuadro de texto quedo vacio. */
-           private fun typeAndSend(editText: AccessibilityNodeInfo, editBounds: Rect, replyText: String): Boolean {
-                 try {
-                       editText.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-                       editText.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+       private fun clickCandidate(node: AccessibilityNodeInfo): Boolean {
+             val b = Rect()
+             node.getBoundsInScreen(b)
+             Log.e(TAG, "clickCandidate: intentando " + b.toString())
+             val clickOk = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+             Log.e(TAG, "clickCandidate: click devolvio " + clickOk)
+             return clickOk
+       }
 
-                       val args = Bundle()
-                       args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, replyText)
-                       val setOk = editText.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-                       Log.e(TAG, "typeAndSend: ACTION_SET_TEXT devolvio " + setOk)
+       /** Escribe el texto y busca el boton de enviar, priorizando el que este mas pegado al
+        * borde derecho de la pantalla. Si el primer candidato no funciona, prueba el siguiente
+         * mas cercano al borde, hasta 3 intentos. Verifica el envio chequeando si el cuadro de
+          * texto quedo vacio. */
+          private fun typeAndSend(editText: AccessibilityNodeInfo, editBounds: Rect, replyText: String): Boolean {
+                try {
+                      editText.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                      editText.performAction(AccessibilityNodeInfo.ACTION_CLICK)
 
-                       Thread.sleep(1000)
+                      val args = Bundle()
+                      args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, replyText)
+                      val setOk = editText.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                      Log.e(TAG, "typeAndSend: ACTION_SET_TEXT devolvio " + setOk)
 
-                       for (attempt in 1..3) {
-                             val freshRoot = rootInActiveWindow ?: return false
-                             val freshEditCandidates = mutableListOf<AccessibilityNodeInfo>()
-                             collectEditTexts(freshRoot, freshEditCandidates, 0)
-                             var freshEditBounds = editBounds
-                             for (c in freshEditCandidates) {
-                                   val b = Rect()
-                                   c.getBoundsInScreen(b)
-                                   if (isValidBounds(b)) {
-                                         freshEditBounds = b
-                                   }
-                             }
+                      Thread.sleep(1000)
 
-                             val candidates = sendButtonCandidatesOrdered(freshRoot, freshEditBounds)
-                             if (candidates.size < attempt) {
-                                   Log.e(TAG, "typeAndSend: no hay mas candidatos para el intento " + attempt)
-                                   break
-                             }
+                      for (attempt in 1..3) {
+                            val freshRoot = rootInActiveWindow ?: return false
+                            val freshEditCandidates = mutableListOf<AccessibilityNodeInfo>()
+                            collectEditTexts(freshRoot, freshEditCandidates, 0)
+                            var freshEditBounds = editBounds
+                            for (c in freshEditCandidates) {
+                                  val b = Rect()
+                                  c.getBoundsInScreen(b)
+                                  if (isValidBounds(b)) {
+                                        freshEditBounds = b
+                                  }
+                            }
 
-                             val candidate = candidates[attempt - 1]
-                             val clickOk = clickCandidate(candidate)
-                             Log.e(TAG, "typeAndSend: intento " + attempt + " click devolvio " + clickOk)
+                            val candidates = sendButtonCandidatesOrdered(freshRoot, freshEditBounds)
+                            if (candidates.size < attempt) {
+                                  Log.e(TAG, "typeAndSend: no hay mas candidatos para el intento " + attempt)
+                                  break
+                            }
 
-                             Thread.sleep(700)
+                            val candidate = candidates[attempt - 1]
+                            val clickOk = clickCandidate(candidate)
+                            Log.e(TAG, "typeAndSend: intento " + attempt + " click devolvio " + clickOk)
 
-                             val remaining = currentEditTextContent()
-                             Log.e(TAG, "typeAndSend: intento " + attempt + " contenido restante: '" + remaining + "'")
+                            Thread.sleep(700)
 
-                             if (remaining.isNullOrBlank()) {
-                                   Log.e(TAG, "typeAndSend: envio confirmado en el intento " + attempt)
-                                   return true
-                             }
-                       }
+                            val remaining = currentEditTextContent()
+                            Log.e(TAG, "typeAndSend: intento " + attempt + " contenido restante: '" + remaining + "'")
 
-                       Log.e(TAG, "typeAndSend: no se pudo confirmar el envio")
-                       return false
-                 } catch (e: Exception) {
-                       Log.e(TAG, "EXCEPCION en typeAndSend: " + e.toString())
-                       return false
-                 }
-           }
+                            if (remaining.isNullOrBlank()) {
+                                  Log.e(TAG, "typeAndSend: envio confirmado en el intento " + attempt)
+                                  return true
+                            }
+                      }
 
-           private fun collectEditTexts(node: AccessibilityNodeInfo, found: MutableList<AccessibilityNodeInfo>, depth: Int) {
-                 if (depth > 25) return
-                 val className = node.className?.toString() ?: ""
-                 if (className.contains("EditText")) {
-                       found.add(node)
-                 }
-                 for (i in 0 until node.childCount) {
-                       val child = node.getChild(i) ?: continue
-                       collectEditTexts(child, found, depth + 1)
-                 }
-           }
+                      Log.e(TAG, "typeAndSend: no se pudo confirmar el envio")
+                      return false
+                } catch (e: Exception) {
+                      Log.e(TAG, "EXCEPCION en typeAndSend: " + e.toString())
+                      return false
+                }
+          }
 
-           private fun collectRowCandidates(node: AccessibilityNodeInfo, editBounds: Rect, candidates: MutableList<AccessibilityNodeInfo>, depth: Int) {
-                 if (depth > 25) return
-                 if (node.isClickable) {
-                       val b = Rect()
-                       node.getBoundsInScreen(b)
-                       val sameRow = Math.abs(b.centerY() - editBounds.centerY()) < 100
-                       val notEditTextItself = !(node.className?.toString() ?: "").contains("EditText")
-                       val notTooWide = b.width() < editBounds.width()
-                       if (sameRow && notEditTextItself && notTooWide) {
-                             candidates.add(node)
-                       }
-                 }
-                 for (i in 0 until node.childCount) {
-                       val child = node.getChild(i) ?: continue
-                       collectRowCandidates(child, editBounds, candidates, depth + 1)
-                 }
-           }
+          private fun collectEditTexts(node: AccessibilityNodeInfo, found: MutableList<AccessibilityNodeInfo>, depth: Int) {
+                if (depth > 25) return
+                val className = node.className?.toString() ?: ""
+                if (className.contains("EditText")) {
+                      found.add(node)
+                }
+                for (i in 0 until node.childCount) {
+                      val child = node.getChild(i) ?: continue
+                      collectEditTexts(child, found, depth + 1)
+                }
+          }
 
-           private fun collectNodes(node: AccessibilityNodeInfo, found: MutableList<String>, depth: Int) {
-                 if (depth > 25) return
-                 val text = node.text?.toString()?.trim()
-                 val desc = node.contentDescription?.toString()?.trim()
-                 val id = node.viewIdResourceName
-                 val className = node.className?.toString()?.substringAfterLast('.')
-                 val hasContent = !text.isNullOrBlank() || !desc.isNullOrBlank()
-                 if (node.isClickable || hasContent) {
-                       val bounds = Rect()
-                       node.getBoundsInScreen(bounds)
-                       val parts = mutableListOf<String>()
-                       if (!text.isNullOrBlank()) parts.add("texto=\"$text\"")
-                       if (!desc.isNullOrBlank()) parts.add("desc=\"$desc\"")
-                       if (!id.isNullOrBlank()) parts.add("id=$id")
-                       parts.add("clase=$className")
-                       parts.add("pos=(" + bounds.centerX() + "," + bounds.centerY() + ")")
-                       if (node.isClickable) parts.add("[CLICKEABLE]")
-                       if (parts.isNotEmpty()) {
-                             found.add(parts.joinToString(" | "))
-                       }
-                 }
-                 for (i in 0 until node.childCount) {
-                       val child = node.getChild(i) ?: continue
-                       collectNodes(child, found, depth + 1)
-                       child.recycle()
-                 }
-           }
+          private fun collectRowCandidates(node: AccessibilityNodeInfo, editBounds: Rect, candidates: MutableList<AccessibilityNodeInfo>, depth: Int) {
+                if (depth > 25) return
+                if (node.isClickable) {
+                      val b = Rect()
+                      node.getBoundsInScreen(b)
+                      val sameRow = Math.abs(b.centerY() - editBounds.centerY()) < 100
+                      val notEditTextItself = !(node.className?.toString() ?: "").contains("EditText")
+                      val notTooWide = b.width() < editBounds.width()
+                      if (sameRow && notEditTextItself && notTooWide) {
+                            candidates.add(node)
+                      }
+                }
+                for (i in 0 until node.childCount) {
+                      val child = node.getChild(i) ?: continue
+                      collectRowCandidates(child, editBounds, candidates, depth + 1)
+                }
+          }
 
-           private fun showScanNotification(title: String, text: String) {
-                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                       val channel = NotificationChannel(
-                             SCAN_CHANNEL_ID,
-                             "Auto Reply - Escaneo de pantalla",
-                             NotificationManager.IMPORTANCE_HIGH
-                             )
-                       val manager = getSystemService(NotificationManager::class.java)
-                       manager.createNotificationChannel(channel)
-                 }
-                 val notification = NotificationCompat.Builder(applicationContext, SCAN_CHANNEL_ID)
-                 .setContentTitle(title)
-                 .setContentText(text)
-                 .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-                 .setSmallIcon(android.R.drawable.ic_menu_search)
-                 .setAutoCancel(true)
-                 .build()
-                 val manager = getSystemService(NotificationManager::class.java)
-                 manager.notify(scanNotifId++, notification)
-           }
+          private fun collectNodes(node: AccessibilityNodeInfo, found: MutableList<String>, depth: Int) {
+                if (depth > 25) return
+                val text = node.text?.toString()?.trim()
+                val desc = node.contentDescription?.toString()?.trim()
+                val id = node.viewIdResourceName
+                val className = node.className?.toString()?.substringAfterLast('.')
+                val hasContent = !text.isNullOrBlank() || !desc.isNullOrBlank()
+                if (node.isClickable || hasContent) {
+                      val bounds = Rect()
+                      node.getBoundsInScreen(bounds)
+                      val parts = mutableListOf<String>()
+                      if (!text.isNullOrBlank()) parts.add("texto=\"$text\"")
+                      if (!desc.isNullOrBlank()) parts.add("desc=\"$desc\"")
+                      if (!id.isNullOrBlank()) parts.add("id=$id")
+                      parts.add("clase=$className")
+                      parts.add("pos=(" + bounds.centerX() + "," + bounds.centerY() + ")")
+                      if (node.isClickable) parts.add("[CLICKEABLE]")
+                      if (parts.isNotEmpty()) {
+                            found.add(parts.joinToString(" | "))
+                      }
+                }
+                for (i in 0 until node.childCount) {
+                      val child = node.getChild(i) ?: continue
+                      collectNodes(child, found, depth + 1)
+                      child.recycle()
+                }
+          }
+
+          private fun showScanNotification(title: String, text: String) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      val channel = NotificationChannel(
+                            SCAN_CHANNEL_ID,
+                            "Auto Reply - Escaneo de pantalla",
+                            NotificationManager.IMPORTANCE_HIGH
+                            )
+                      val manager = getSystemService(NotificationManager::class.java)
+                      manager.createNotificationChannel(channel)
+                }
+                val notification = NotificationCompat.Builder(applicationContext, SCAN_CHANNEL_ID)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setSmallIcon(android.R.drawable.ic_menu_search)
+                .setAutoCancel(true)
+                .build()
+                val manager = getSystemService(NotificationManager::class.java)
+                manager.notify(scanNotifId++, notification)
+          }
 }
