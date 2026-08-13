@@ -18,13 +18,16 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.apiKeyInput.setText(SecurePrefs.getApiKey(this))
+        val savedKeys = SecurePrefs.getApiKeysList(this)
+        binding.apiKeyInput.setText(if (savedKeys.isNotEmpty()) savedKeys.joinToString("\n") else SecurePrefs.getApiKey(this))
         binding.promptInput.setText(SecurePrefs.getPrompt(this))
         binding.activeSwitch.isChecked = SecurePrefs.isActive(this)
         updateStatusText()
 
         binding.saveButton.setOnClickListener {
-            SecurePrefs.saveApiKey(this, binding.apiKeyInput.text.toString().trim())
+            val apiKeyText = binding.apiKeyInput.text.toString().trim()
+            SecurePrefs.saveApiKey(this, apiKeyText)
+            SecurePrefs.saveApiKeysList(this, apiKeyText)
             SecurePrefs.savePrompt(this, binding.promptInput.text.toString().trim())
         }
 
@@ -49,7 +52,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.activeSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked && binding.apiKeyInput.text.toString().isBlank()) {
-                AlertDialog.Builder(this).setTitle("Falta la API key").setMessage("Ingresa tu API key de Gemini y guarda la configuracion antes de activar.").setPositiveButton("Entendido", null).show()
+                AlertDialog.Builder(this).setTitle("Falta la API key").setMessage("Ingresa tu API key y guarda la configuracion antes de activar.").setPositiveButton("Entendido", null).show()
                 binding.activeSwitch.isChecked = false
                 return@setOnCheckedChangeListener
             }
