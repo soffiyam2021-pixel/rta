@@ -23,7 +23,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="API Key de Gemini (Google AI Studio)"
+        android:text="API Key (una o varias separadas por coma)"
         android:textStyle="bold"
         android:layout_marginBottom="4dp"/>
 
@@ -31,8 +31,8 @@
         android:id="@+id/apiKeyInput"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="AIza..."
-        android:inputType="textPassword"
+        android:hint="gsk_... o gsk_...,gsk_..."
+        android:inputType="textVisiblePassword"
         android:layout_marginBottom="8dp"/>
 
     <TextView
@@ -80,13 +80,13 @@
         android:text="3. Elegir apps (opcional)"
         android:layout_marginBottom="8dp"/>
 
-        <Button
-            android:id="@+id/accessibilityButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="4. Habilitar Accesibilidad"
-            android:layout_marginBottom="16dp"/>
-        
+    <Button
+        android:id="@+id/accessibilityButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="4. Habilitar Accesibilidad"
+        android:layout_marginBottom="16dp"/>
+
     <com.google.android.material.switchmaterial.SwitchMaterial
         android:id="@+id/activeSwitch"
         android:layout_width="wrap_content"
