@@ -24,7 +24,6 @@ class TimoAccessibilityService : AccessibilityService() {
             private const val AUTO_CHECK_COOLDOWN_MS = 3000L
             @Volatile private var isProcessing = false
             @Volatile private var lastAutoCheckTime = 0L
-            @Volatile private var eventCounter = 0
             private val KNOWN_UI_LABELS = setOf(
                   "Saudação à correspondência",
                   "Video",
@@ -77,35 +76,24 @@ class TimoAccessibilityService : AccessibilityService() {
       }
 
       /** Detecta cambios de pantalla mientras Timo esta abierto, para disparar respuestas
-       * automaticas sin necesidad de tocar la burbuja. Con logging detallado para diagnostico. */
+       * automaticas sin necesidad de tocar la burbuja. Respeta el interruptor de activo/inactivo. */
        override fun onAccessibilityEvent(event: AccessibilityEvent?) {
              try {
-                   val pkg = event?.packageName?.toString()
+                   if (!SecurePrefs.isActive(applicationContext)) return
+
+                   val pkg = event?.packageName?.toString() ?: return
                    if (pkg != TIMO_PACKAGE) return
-
-                   eventCounter++
-                   if (eventCounter % 20 == 0) {
-                         Log.e(TAG, "onAccessibilityEvent: recibidos " + eventCounter + " eventos de Timo, tipo=" + event?.eventType + " isProcessing=" + isProcessing)
-                   }
-
                    if (isProcessing) return
 
                    val now = System.currentTimeMillis()
-                   val sinceLast = now - lastAutoCheckTime
-                   if (sinceLast < AUTO_CHECK_COOLDOWN_MS) return
+                   if (now - lastAutoCheckTime < AUTO_CHECK_COOLDOWN_MS) return
                    lastAutoCheckTime = now
 
-                   val root = rootInActiveWindow
-                   if (root == null) {
-                         Log.e(TAG, "onAccessibilityEvent: root es null, no puedo chequear")
-                         return
-                   }
+                   val root = rootInActiveWindow ?: return
                    val unreadRow = findFirstUnreadRow(root)
-                   if (unreadRow == null) {
-                         return
-                   }
+                   if (unreadRow == null) return
 
-                   Log.e(TAG, "onAccessibilityEvent: mensajes sin leer detectados con Timo abierto (evento tipo=" + event?.eventType + "), disparando respuesta automatica")
+                   Log.e(TAG, "onAccessibilityEvent: mensajes sin leer detectados con Timo abierto, disparando respuesta automatica")
                    Thread {
                          respondToAllUnread()
                    }.start()
@@ -163,12 +151,20 @@ class TimoAccessibilityService : AccessibilityService() {
                    Log.e(TAG, "respondToAllUnread: ya hay un proceso en curso, se ignora")
                    return
              }
+             if (!SecurePrefs.isActive(applicationContext)) {
+                   Log.e(TAG, "respondToAllUnread: la auto-respuesta esta desactivada, se ignora")
+                   return
+             }
              isProcessing = true
              try {
                    Log.e(TAG, "respondToAllUnread iniciado")
                    var attempts = 0
                    var repliedCount = 0
                    while (attempts < MAX_UNREAD_PER_RUN) {
+                         if (!SecurePrefs.isActive(applicationContext)) {
+                               Log.e(TAG, "respondToAllUnread: se desactivo durante la ejecucion, freno")
+                               break
+                         }
                          attempts++
                          val root = rootInActiveWindow
                          if (root == null) {
@@ -207,9 +203,6 @@ class TimoAccessibilityService : AccessibilityService() {
                          }
                    }
                    Log.e(TAG, "respondToAllUnread: termino, respondidas=" + repliedCount + " intentos=" + attempts)
-                   if (attempts >= MAX_UNREAD_PER_RUN) {
-                         Log.e(TAG, "respondToAllUnread: se alcanzo el limite de " + MAX_UNREAD_PER_RUN + ", puede haber mas pendientes")
-                   }
                    showScanNotification("Respuestas automaticas", "Se respondieron " + repliedCount + " conversaciones sin leer.")
              } catch (e: Exception) {
                    Log.e(TAG, "EXCEPCION en respondToAllUnread: " + e.toString())
