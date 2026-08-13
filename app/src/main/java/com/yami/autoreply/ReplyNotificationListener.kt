@@ -24,17 +24,18 @@ class ReplyNotificationListener : NotificationListenerService() {
         private const val TAG = "AutoReplyListener"
         private const val DEBUG_CHANNEL_ID = "auto_reply_debug"
         private var debugNotifId = 5000
+        private const val TIMO_PACKAGE = "com.hwsj.chat"
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
 
         if (!SecurePrefs.isActive(applicationContext)) return
-        if (sbn.packageName == applicationContext.packageName) return
-        if (sbn.packageName.startsWith("android")) return
 
-        val selectedApps = SecurePrefs.getSelectedApps(applicationContext)
-        if (selectedApps.isNotEmpty() && !selectedApps.contains(sbn.packageName)) return
+        /** Restringido unicamente a Timo. Este listener puede recibir notificaciones de
+         * cualquier app instalada; se limita expresamente a Timo para evitar responder
+          * mensajes de Gmail, WhatsApp u otras apps por error. */
+        if (sbn.packageName != TIMO_PACKAGE) return
 
         val appName = appLabelForPackage(sbn.packageName)
 
@@ -64,11 +65,11 @@ class ReplyNotificationListener : NotificationListenerService() {
         }
 
         scope.launch {
-            val apiKey = SecurePrefs.getApiKey(applicationContext)
+            val apiKeys = SecurePrefs.getApiKeysList(applicationContext)
             val instructions = SecurePrefs.getPrompt(applicationContext)
 
             when (val result = ClaudeApiClient.generateReply(
-                apiKey = apiKey,
+                apiKeys = apiKeys,
                 appName = appName,
                 sender = sender,
                 messageText = messageText,
