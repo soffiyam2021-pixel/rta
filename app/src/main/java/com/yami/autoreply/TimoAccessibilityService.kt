@@ -20,7 +20,7 @@ class TimoAccessibilityService : AccessibilityService() {
             private const val TAG = "AutoReplyDebug"
             private const val MAX_UNREAD_PER_RUN = 30
             private const val HEADER_ZONE_TOP = 350
-            private const val TIMO_PACKAGE = "com.hwsj.chat"
+            private val TIMO_PACKAGES = setOf("com.hwsj.chat", "com.hwsj.club")
             private const val AUTO_CHECK_COOLDOWN_MS = 3000L
             @Volatile private var isProcessing = false
             @Volatile private var lastAutoCheckTime = 0L
@@ -75,14 +75,14 @@ class TimoAccessibilityService : AccessibilityService() {
             instance = null
       }
 
-      /** Detecta cambios de pantalla mientras Timo esta abierto, para disparar respuestas
-       * automaticas sin necesidad de tocar la burbuja. Respeta el interruptor de activo/inactivo. */
+      /** Detecta cambios de pantalla mientras Timo o Timo Club estan abiertos, para disparar
+       * respuestas automaticas sin necesidad de tocar la burbuja. Respeta el interruptor. */
        override fun onAccessibilityEvent(event: AccessibilityEvent?) {
              try {
                    if (!SecurePrefs.isActive(applicationContext)) return
 
                    val pkg = event?.packageName?.toString() ?: return
-                   if (pkg != TIMO_PACKAGE) return
+                   if (!TIMO_PACKAGES.contains(pkg)) return
                    if (isProcessing) return
 
                    val now = System.currentTimeMillis()
