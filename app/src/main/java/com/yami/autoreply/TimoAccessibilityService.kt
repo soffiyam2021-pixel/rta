@@ -463,7 +463,7 @@ class TimoAccessibilityService : AccessibilityService() {
                        val setOk = editText.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
                        Log.e(TAG, "typeAndSend: ACTION_SET_TEXT devolvio " + setOk)
 
-                       Thread.sleep(1600)
+                                               Thread.sleep(2800)
 
                        val freshRoot = rootInActiveWindow ?: return false
                        val freshEditCandidates = mutableListOf<AccessibilityNodeInfo>()
