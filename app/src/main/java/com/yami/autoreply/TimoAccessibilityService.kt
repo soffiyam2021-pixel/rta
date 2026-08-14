@@ -1,4 +1,4 @@
-ctrl:Endpackage com.yami.autoreply
+package com.yami.autoreply
 
 import android.accessibilityservice.AccessibilityService
 import android.app.NotificationChannel
