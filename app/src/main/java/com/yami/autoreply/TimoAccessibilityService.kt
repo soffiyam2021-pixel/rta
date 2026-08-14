@@ -1,4 +1,4 @@
-package com.yami.autoreply
+ctrl:Endpackage com.yami.autoreply
 
 import android.accessibilityservice.AccessibilityService
 import android.app.NotificationChannel
@@ -493,8 +493,7 @@ class TimoAccessibilityService : AccessibilityService() {
 
                        val remaining = currentEditTextContent()
                        Log.e(TAG, "typeAndSend: contenido restante tras el clic: '" + remaining + "'")
-
-                       if (remaining.isNullOrBlank()) {
+          if (remaining.isNullOrBlank() || remaining == "Di algo...") {
                              Log.e(TAG, "typeAndSend: envio confirmado")
                              return true
                        }
