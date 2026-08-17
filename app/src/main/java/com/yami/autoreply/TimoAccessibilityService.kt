@@ -20,7 +20,7 @@ class TimoAccessibilityService : AccessibilityService() {
             private const val TAG = "AutoReplyDebug"
             private const val MAX_UNREAD_PER_RUN = 30
             private const val HEADER_ZONE_TOP = 350
-            private val TIMO_PACKAGES = setOf("com.hwsj.chat", "com.hwsj.club")
+            private const val TIMO_PACKAGE = "com.hwsj.chat"
             private const val AUTO_CHECK_COOLDOWN_MS = 4000L
             @Volatile private var isProcessing = false
             @Volatile private var lastAutoCheckTime = 0L
@@ -77,10 +77,8 @@ class TimoAccessibilityService : AccessibilityService() {
 
       override fun onAccessibilityEvent(event: AccessibilityEvent?) {
             try {
-                  if (!SecurePrefs.isActive(applicationContext)) return
-
                   val pkg = event?.packageName?.toString() ?: return
-                  if (!TIMO_PACKAGES.contains(pkg)) return
+                  if (pkg != TIMO_PACKAGE) return
                   if (isProcessing) return
 
                   val now = System.currentTimeMillis()
@@ -149,20 +147,12 @@ class TimoAccessibilityService : AccessibilityService() {
                   Log.e(TAG, "respondToAllUnread: ya hay un proceso en curso, se ignora")
                   return
             }
-            if (!SecurePrefs.isActive(applicationContext)) {
-                  Log.e(TAG, "respondToAllUnread: la auto-respuesta esta desactivada, se ignora")
-                  return
-            }
             isProcessing = true
             try {
                   Log.e(TAG, "respondToAllUnread iniciado")
                   var attempts = 0
                   var repliedCount = 0
                   while (attempts < MAX_UNREAD_PER_RUN) {
-                        if (!SecurePrefs.isActive(applicationContext)) {
-                              Log.e(TAG, "respondToAllUnread: se desactivo durante la ejecucion, freno")
-                              break
-                        }
                         attempts++
                         val root = rootInActiveWindow
                         if (root == null) {
@@ -202,17 +192,6 @@ class TimoAccessibilityService : AccessibilityService() {
                   }
                   Log.e(TAG, "respondToAllUnread: termino, respondidas=" + repliedCount + " intentos=" + attempts)
                   showScanNotification("Respuestas automaticas", "Se respondieron " + repliedCount + " conversaciones sin leer.")
-
-                  if (attempts >= MAX_UNREAD_PER_RUN && SecurePrefs.isActive(applicationContext)) {
-                        val root2 = rootInActiveWindow
-                        if (root2 != null && findFirstUnreadRow(root2) != null) {
-                              Log.e(TAG, "respondToAllUnread: se alcanzo el limite pero quedan mas mensajes, se relanza")
-                              Thread {
-                                    Thread.sleep(1500)
-                                    respondToAllUnread()
-                              }.start()
-                        }
-                  }
             } catch (e: Exception) {
                   Log.e(TAG, "EXCEPCION en respondToAllUnread: " + e.toString())
             } finally {
