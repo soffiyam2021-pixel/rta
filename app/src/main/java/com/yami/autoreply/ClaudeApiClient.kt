@@ -16,7 +16,7 @@ sealed class ReplyResult {
 object ClaudeApiClient {
 
             private val client = OkHttpClient()
-                private const val MODEL = "llama-3.3-70b-versatile"
+                    private const val MODEL = "openai/gpt-oss-20b"
             private const val ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
             /** Intenta generar la respuesta probando cada API key de la lista en orden.
