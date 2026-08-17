@@ -99,7 +99,7 @@ object ClaudeApiClient {
                         .put("model", MODEL)
                         .put("messages", messages)
                         .put("temperature", 0.8)
-                        .put("max_tokens", 200)
+                                    .put("max_tokens", 400)
 
                         val body = payload.toString().toRequestBody("application/json".toMediaType())
                         val request = Request.Builder()
