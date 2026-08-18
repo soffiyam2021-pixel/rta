@@ -32,8 +32,9 @@ class TimoAccessibilityService : AccessibilityService() {
                   "En línea",
                   "Charlamos ayer",
                   "Solo uno",
-                  "Visibilidad",
-                  "Di algo..."
+                              "Visibilidad",
+                              "Tarea en curso",
+                              "Di algo..."
                   )
             private val KEYWORD_BLOCKLIST = listOf(
                   "recompensa",
