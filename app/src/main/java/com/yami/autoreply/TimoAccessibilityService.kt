@@ -143,6 +143,24 @@ class TimoAccessibilityService : AccessibilityService() {
             return findBestEditText(root) != null
       }
 
+                    /** Si tras responder aparece una pantalla que no es ni la lista de chats ni un
+                                   * chat abierto (por ejemplo, una ventana emergente de Timo), presiona "atras"
+                                                  * una vez para cerrarla y poder seguir con el flujo normal. */
+                                                                private fun dismissPopupIfPresent() {
+                                                                                          try {
+                                                                                                                          val root = rootInActiveWindow ?: return
+                                                                                                                          val looksLikeChat = findBestEditText(root) != null
+                                                                                                                          val looksLikeList = findFirstUnreadRow(root) != null
+                                                                                                                          if (!looksLikeChat && !looksLikeList) {
+                                                                                                                                                                Log.e(TAG, "dismissPopupIfPresent: pantalla no reconocida, posible ventana emergente, presionando atras")
+                                                                                                                                                                                                performGlobalAction(GLOBAL_ACTION_BACK)
+                                                                                                                                                                                                                                Thread.sleep(700)
+                                                                                                                                                                                                                                                          }
+                                                                                          } catch (e: Exception) {
+                                                                                                                          Log.e(TAG, "EXCEPCION en dismissPopupIfPresent: " + e.toString())
+                                                                                          }
+                                                                }
+
       fun respondToAllUnread() {
             if (isProcessing) {
                   Log.e(TAG, "respondToAllUnread: ya hay un proceso en curso, se ignora")
@@ -180,6 +198,8 @@ class TimoAccessibilityService : AccessibilityService() {
                         val sent = autoReplyWithAI()
                         Log.e(TAG, "respondToAllUnread: autoReplyWithAI devolvio " + sent)
                         if (sent) repliedCount++
+
+                                      dismissPopupIfPresent()
 
                         Thread.sleep(500)
                         performGlobalAction(GLOBAL_ACTION_BACK)
