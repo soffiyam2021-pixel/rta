@@ -63,6 +63,14 @@ class TimoAccessibilityService : AccessibilityService() {
                   "vaya numero",
                   "vaya número"
                   )
+
+                          /** Textos que indican que aparecio una ventana emergente de Timo tapando la
+                                         * pantalla (regalos, promociones, etc). Se va ampliando con nuevos casos. */
+                                                       private val POPUP_MARKERS = listOf(
+                                                                                 "Has recibido un regalo",
+                                                                                 "aumentar la intimidad",
+                                                                                 "Regalo válido dentro de"
+                                                                           )
       }
 
       override fun onServiceConnected() {
@@ -146,21 +154,41 @@ class TimoAccessibilityService : AccessibilityService() {
                     /** Si tras responder aparece una pantalla que no es ni la lista de chats ni un
                                    * chat abierto (por ejemplo, una ventana emergente de Timo), presiona "atras"
                                                   * una vez para cerrarla y poder seguir con el flujo normal. */
-                                                                private fun dismissPopupIfPresent() {
-                                                                                          try {
-                                                                                                                          val root = rootInActiveWindow ?: return
-                                                                                                                          val looksLikeChat = findBestEditText(root) != null
-                                                                                                                          val looksLikeList = findFirstUnreadRow(root) != null
-                                                                                                                          if (!looksLikeChat && !looksLikeList) {
-                                                                                                                                                                Log.e(TAG, "dismissPopupIfPresent: pantalla no reconocida, posible ventana emergente, presionando atras")
-                                                                                                                                                                                                performGlobalAction(GLOBAL_ACTION_BACK)
-                                                                                                                                                                                                                                Thread.sleep(700)
-                                                                                                                                                                                                                                                          }
-                                                                                          } catch (e: Exception) {
-                                                                                                                          Log.e(TAG, "EXCEPCION en dismissPopupIfPresent: " + e.toString())
-                                                                                          }
-                                                                }
+        private fun dismissPopupIfPresent() {
+                            try {
+                                                      val root = rootInActiveWindow ?: return
 
+                                                      val texts = mutableListOf<String>()
+                                                                          collectAllTexts(root, texts, 0)
+                                                                                              val hasPopupMarker = texts.any { t -> POPUP_MARKERS.any { marker -> t.contains(marker, ignoreCase = true) } }
+                                                                                                                  if (hasPopupMarker) {
+                                                                                                                                                  Log.e(TAG, "dismissPopupIfPresent: ventana emergente detectada por texto, presionando atras")
+                                                                                                                                                                            performGlobalAction(GLOBAL_ACTION_BACK)
+                                                                                                                                                                                                      Thread.sleep(700)
+                                                                                                                                                                                                                                return
+                                                                                                                  }
+                                                                                                                  
+                                                                                                                                      val looksLikeChat = findBestEditText(root) != null
+                                                      val looksLikeList = findFirstUnreadRow(root) != null
+                                                      if (!looksLikeChat && !looksLikeList) {
+                                                                                      Log.e(TAG, "dismissPopupIfPresent: pantalla no reconocida, posible ventana emergente, presionando atras")
+                                                                                                                performGlobalAction(GLOBAL_ACTION_BACK)
+                                                                                                                                          Thread.sleep(700)
+                                                      }
+                            } catch (e: Exception) {
+                                                      Log.e(TAG, "EXCEPCION en dismissPopupIfPresent: " + e.toString())
+                            }
+        }
+
+                private fun collectAllTexts(node: AccessibilityNodeInfo, found: MutableList<String>, depth: Int) {
+                                    if (depth > 25) return
+                                    val text = node.text?.toString()?.trim()
+                                                  if (!text.isNullOrBlank()) found.add(text)
+                                                                for (i in 0 until node.childCount) {
+                                                                                          val child = node.getChild(i) ?: continue
+                                                                                          collectAllTexts(child, found, depth + 1)
+                                                                }
+                }
       fun respondToAllUnread() {
             if (isProcessing) {
                   Log.e(TAG, "respondToAllUnread: ya hay un proceso en curso, se ignora")
