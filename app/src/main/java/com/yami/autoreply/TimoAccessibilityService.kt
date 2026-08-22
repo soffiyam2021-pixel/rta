@@ -99,6 +99,8 @@ class TimoAccessibilityService : AccessibilityService() {
                   lastAutoCheckTime = now
 
                   val root = rootInActiveWindow ?: return
+
+                                dismissPopupIfPresent()
                   val hasUnread = findFirstUnreadRow(root) != null
                   if (!hasUnread) return
 
