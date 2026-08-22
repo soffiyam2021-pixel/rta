@@ -70,7 +70,10 @@ class TimoAccessibilityService : AccessibilityService() {
                                                        private val POPUP_MARKERS = listOf(
                                                                                  "Has recibido un regalo",
                                                                                  "aumentar la intimidad",
-                                                                                 "Regalo válido dentro de"
+                                                                                 "Regalo válido dentro de",
+                                                                         "Has completado Tarea",
+                                                                         "aceleración de tráfico",
+                                                                         "Permanezca conectado"
                                                                            )
       }
 
@@ -223,6 +226,8 @@ class TimoAccessibilityService : AccessibilityService() {
                         if (!clickOk) break
 
                         Thread.sleep(1200)
+
+                                      dismissPopupIfPresent()
 
                         val sent = autoReplyWithAI()
                         Log.e(TAG, "respondToAllUnread: autoReplyWithAI devolvio " + sent)
