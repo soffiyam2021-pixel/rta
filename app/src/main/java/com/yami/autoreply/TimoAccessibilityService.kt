@@ -20,7 +20,7 @@ class TimoAccessibilityService : AccessibilityService() {
             private const val TAG = "AutoReplyDebug"
             private const val MAX_UNREAD_PER_RUN = 30
             private const val HEADER_ZONE_TOP = 350
-            private const val TIMO_PACKAGE = "com.hwsj.chat"
+                    private val TIMO_PACKAGES = setOf("com.hwsj.chat", "com.hwsj.club")
             private const val AUTO_CHECK_COOLDOWN_MS = 4000L
             @Volatile private var isProcessing = false
             @Volatile private var lastAutoCheckTime = 0L
@@ -90,7 +90,7 @@ class TimoAccessibilityService : AccessibilityService() {
       override fun onAccessibilityEvent(event: AccessibilityEvent?) {
             try {
                   val pkg = event?.packageName?.toString() ?: return
-                  if (pkg != TIMO_PACKAGE) return
+                              if (!TIMO_PACKAGES.contains(pkg)) return
                   if (isProcessing) return
 
                   val now = System.currentTimeMillis()
@@ -99,6 +99,11 @@ class TimoAccessibilityService : AccessibilityService() {
 
                   val root = rootInActiveWindow ?: return
                   dismissPopupIfPresent()
+                              if (isStillInChat()) {
+                                                      Log.e(TAG, "onAccessibilityEvent: seguia dentro del chat tras cerrar ventana, presionando atras")
+                                                                        performGlobalAction(GLOBAL_ACTION_BACK)
+                                                                                          return
+                              }
                   val hasUnread = findFirstUnreadRow(root) != null
                   if (!hasUnread) return
 
