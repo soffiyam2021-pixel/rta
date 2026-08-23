@@ -64,14 +64,16 @@ class TimoAccessibilityService : AccessibilityService() {
                   "vaya numero",
                   "vaya número"
                   )
-            private val POPUP_MARKERS = listOf(
-                  "Has recibido un regalo",
-                  "aumentar la intimidad",
-                  "Regalo válido dentro de",
-                  "Has completado Tarea",
-                  "aceleración de tráfico",
-                  "Permanezca conectado"
-                  )
+        private val GIFT_POPUP_MARKERS = listOf(
+                          "Has recibido un regalo",
+                          "aumentar la intimidad",
+                          "Regalo válido dentro de"
+                      )
+                private val TASK_COMPLETE_MARKERS = listOf(
+                                  "Has completado Tarea",
+                                  "aceleración de tráfico",
+                                  "Permanezca conectado"
+                              )
       }
 
       override fun onServiceConnected() {
@@ -158,37 +160,56 @@ class TimoAccessibilityService : AccessibilityService() {
         * "atras", ya que "atras" en esa pantalla puede volver a dispararlo. Para el
          * resto de ventanas conocidas, usa "atras". No se hace nada si no se reconoce
           * ninguna ventana (evita presionar atras quando simplemente no hay mensajes). */
-          private fun dismissPopupIfPresent() {
-                try {
-                      val root = rootInActiveWindow ?: return
+                  private fun dismissPopupIfPresent() {
+                                      try {
+                                                                val root = rootInActiveWindow ?: return
 
-                      val texts = mutableListOf<String>()
-                      collectAllTexts(root, texts, 0)
+                                                                val texts = mutableListOf<String>()
+                                                                                    collectAllTexts(root, texts, 0)
 
-                      val isExitWarning = texts.any { t -> t.contains("No podrás recibir ninguna notificación", ignoreCase = true) || t.contains("quieres cerrarla", ignoreCase = true) }
-                      if (isExitWarning) {
-                            Log.e(TAG, "dismissPopupIfPresent: aviso de salida detectado, buscando boton Cancelar")
-                            val cancelNode = findNodeByExactText(root, "Cancelar")
-                            val cancelButton = if (cancelNode != null) findClickableAncestor(cancelNode, 6) else null
-                            if (cancelButton != null) {
-                                  val clickOk = cancelButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                                  Log.e(TAG, "dismissPopupIfPresent: click en Cancelar devolvio " + clickOk)
-                            } else {
-                                  Log.e(TAG, "dismissPopupIfPresent: no se encontro boton Cancelar")
-                            }
-                            Thread.sleep(700)
-                            return
-                      }
+                                                                                                        val isExitWarning = texts.any { t -> t.contains("No podrás recibir ninguna notificación", ignoreCase = true) || t.contains("quieres cerrarla", ignoreCase = true) }
+                                                                                                                            if (isExitWarning) {
+                                                                                                                                                            Log.e(TAG, "dismissPopupIfPresent: aviso de salida detectado, buscando boton Cancelar")
+                                                                                                                                                                                      clickButtonByText(root, "Cancelar", "Cancelar")
+                                                                                                                                                                                                                Thread.sleep(700)
+                                                                                                                                                                                                                                          return
+                                                                                                                            }
+                                                                                                                            
+                                                                                                                                                val isGiftPopup = texts.any { t -> GIFT_POPUP_MARKERS.any { marker -> t.contains(marker, ignoreCase = true) } }
+                                                                                                                                                                    if (isGiftPopup) {
+                                                                                                                                                                                                    Log.e(TAG, "dismissPopupIfPresent: ventana de regalo detectada, buscando boton X")
+                                                                                                                                                                                                                              val closed = clickButtonByText(root, "×", "X (regalo)") || clickButtonByText(root, "X", "X (regalo)")
+                                                                                                                                                                                                                                                        if (!closed) {
+                                                                                                                                                                                                                                                                                              Log.e(TAG, "dismissPopupIfPresent: no se encontro boton X, uso atras")
+                                                                                                                                                                                                                                                                                                                              performGlobalAction(GLOBAL_ACTION_BACK)
+                                                                                                                                                                                                                                                                                                                                                        }
+                                                                                                                                                                                                                                                                                  Thread.sleep(700)
+                                                                                                                                                                                                                                                                                                            return
+                                                                                                                                                                    }
+                                                                                                                                                                    
+                                                                                                                                                                                        val isTaskComplete = texts.any { t -> TASK_COMPLETE_MARKERS.any { marker -> t.contains(marker, ignoreCase = true) } }
+                                                                                                                                                                                                            if (isTaskComplete) {
+                                                                                                                                                                                                                                            Log.e(TAG, "dismissPopupIfPresent: ventana de tarea completada detectada, buscando boton Lo se")
+                                                                                                                                                                                                                                                                      val closed = clickButtonByText(root, "Lo sé", "Lo se")
+                                                                                                                                                                                                                                                                                                if (!closed) {
+                                                                                                                                                                                                                                                                                                                                      Log.e(TAG, "dismissPopupIfPresent: no se encontro boton Lo se, uso atras")
+                                                                                                                                                                                                                                                                                                                                                                      performGlobalAction(GLOBAL_ACTION_BACK)
+                                                                                                                                                                                                                                                                                                                                                                                                }
+                                                                                                                                                                                                                                                                                                                          Thread.sleep(700)
+                                                                                                                                                                                                                                                                                                                                              }
+                                                                                                                                                                                                                          } catch (e: Exception) {
+                                                                Log.e(TAG, "EXCEPCION en dismissPopupIfPresent: " + e.toString())
+                                      }
+                  }
 
-                      val hasPopupMarker = texts.any { t -> POPUP_MARKERS.any { marker -> t.contains(marker, ignoreCase = true) } }
-                      if (hasPopupMarker) {
-                            Log.e(TAG, "dismissPopupIfPresent: ventana emergente detectada por texto, presionando atras")
-                            performGlobalAction(GLOBAL_ACTION_BACK)
-                            Thread.sleep(700)
-                      }
-                } catch (e: Exception) {
-                      Log.e(TAG, "EXCEPCION en dismissPopupIfPresent: " + e.toString())
-                }
+                          /** Busca un nodo con el texto exacto indicado, encuentra su ancestro tocable
+                                   * y lo toca. Devuelve true si encontro y toco el boton. */
+                                           private fun clickButtonByText(root: AccessibilityNodeInfo, targetText: String, logLabel: String): Boolean {
+                                                               val node = findNodeByExactText(root, targetText) ?: return false
+                                                               val button = findClickableAncestor(node, 6) ?: return false
+                                                               val clickOk = button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                                                                             Log.e(TAG, "clickButtonByText: click en " + logLabel + " devolvio " + clickOk)
+                                                                                           return clickOk
           }
 
           private fun findNodeByExactText(node: AccessibilityNodeInfo, target: String): AccessibilityNodeInfo? {
