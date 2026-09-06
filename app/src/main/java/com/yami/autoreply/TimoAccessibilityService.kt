@@ -333,6 +333,10 @@ class TimoAccessibilityService : AccessibilityService() {
                                  val sent = autoReplyWithAI()
                                  Log.e(TAG, "respondToAllUnread: autoReplyWithAI devolvio " + sent)
                                  if (sent) repliedCount++
+                                               if (!sent) {
+                                                                         Log.e(TAG, "respondToAllUnread: fallo el envio (posible corte de wifi), espero un poco extra antes de seguir")
+                                                                                             Thread.sleep(2000)
+                                               }
 
                                  dismissPopupIfPresent()
 
