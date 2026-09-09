@@ -465,7 +465,12 @@ class TimoAccessibilityService : AccessibilityService() {
                                  }
                                  is ReplyResult.Error -> {
                                        Log.e(TAG, "autoReplyWithAI: error de IA: " + result.message)
-                                       return false
+                                       if (result.message.contains("vacio", ignoreCase = true)) {
+                                         Log.e(TAG, "autoReplyWithAI: IA devolvio vacio, uso respuesta de repuesto")
+                                         replyText = "jajaja que tal ese dia!"
+                                       } else {
+                                         return false
+                                       }
                                  }
                            }
 
