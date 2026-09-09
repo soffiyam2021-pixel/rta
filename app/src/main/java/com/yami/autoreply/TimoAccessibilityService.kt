@@ -340,15 +340,13 @@ class TimoAccessibilityService : AccessibilityService() {
 
                                  dismissPopupIfPresent()
 
-                                 Thread.sleep(500)
-                                 performGlobalAction(GLOBAL_ACTION_BACK)
-                                 Thread.sleep(700)
-                                 if (isStillInChat()) {
-                                       performGlobalAction(GLOBAL_ACTION_BACK)
-                                       Thread.sleep(1000)
-                                 } else {
-                                       Thread.sleep(300)
-                                 }
+                                                                  Thread.sleep(500)
+                                                                                                   var backAttempts = 0
+                                                                  while (isStillInChat() && backAttempts < 3) {
+                                                                                                               performGlobalAction(GLOBAL_ACTION_BACK)
+                                                                                                                                                      Thread.sleep(5000)
+                                                                                                                                                                                             backAttempts++
+                                                                  }
                            }
                            Log.e(TAG, "respondToAllUnread: termino, respondidas=" + repliedCount + " intentos=" + attempts)
                            showScanNotification("Respuestas automaticas", "Se respondieron " + repliedCount + " conversaciones sin leer.")
