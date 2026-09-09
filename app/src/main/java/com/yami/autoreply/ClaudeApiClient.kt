@@ -35,7 +35,7 @@ object ClaudeApiClient {
                                     val result = generateReplySingleKey(key, appName, sender, messageText, userInstructions)
                                     if (result is ReplyResult.Success) return result
                                     lastError = result as ReplyResult.Error
-                                    val shouldTryNext = lastError.message.contains("429") || lastError.message.contains("401") || lastError.message.contains("quota", ignoreCase = true)
+                                    val shouldTryNext = lastError.message.contains("429") || lastError.message.contains("401") || lastError.message.contains("quota", ignoreCase = true) || lastError.message.contains("403") || lastError.message.contains("Access denied", ignoreCase = true)
                                     if (!shouldTryNext) return lastError
                         }
                         return lastError ?: ReplyResult.Error("No hay API keys configuradas")
