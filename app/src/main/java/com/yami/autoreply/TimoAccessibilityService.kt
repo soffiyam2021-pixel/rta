@@ -24,6 +24,12 @@ class TimoAccessibilityService : AccessibilityService() {
             private const val AUTO_CHECK_COOLDOWN_MS = 4000L
             @Volatile private var isProcessing = false
             @Volatile private var lastAutoCheckTime = 0L
+            // Filas de "notificaciones del sistema" de la app de citas (no son chats reales,
+                        // no tienen EditText para responder) que nunca deben abrirse como si fueran conversaciones.
+                        private val SYSTEM_ROW_BLOCKLIST = listOf(
+                                                "Asistente Oficial",
+                                                "Mensaje del sistema"
+                                                )
             private val KNOWN_UI_LABELS = setOf(
                   "Saudação à correspondência",
                   "Video",
@@ -328,7 +334,7 @@ class TimoAccessibilityService : AccessibilityService() {
 
                                  Thread.sleep(1200)
 
-                                 dismissPopupIfPresent()
+                                 val popupBefore = dismissPopupIfPresent()
 
                                  val sent = autoReplyWithAI()
                                  Log.e(TAG, "respondToAllUnread: autoReplyWithAI devolvio " + sent)
@@ -338,13 +344,15 @@ class TimoAccessibilityService : AccessibilityService() {
                                                                                              Thread.sleep(2000)
                                                }
 
-                                 dismissPopupIfPresent()
+                                 val popupAfter = dismissPopupIfPresent()
 
                                                                   Thread.sleep(500)
                                                                                                    var backAttempts = 0
+                                                                                                   // Si hubo una ventana emergente antes o despues de la respuesta, no hace falta esperar tanto entre reintentos de "atras".
+                                                                                                   val backRetryDelayMs = if (popupBefore || popupAfter) 3500L else 5000L
                                                                   while (isStillInChat() && backAttempts < 3) {
                                                                                                                performGlobalAction(GLOBAL_ACTION_BACK)
-                                                                                                                                                      Thread.sleep(5000)
+                                                                                                                                                      Thread.sleep(backRetryDelayMs)
                                                                                                                                                                                              backAttempts++
                                                                   }
                            }
