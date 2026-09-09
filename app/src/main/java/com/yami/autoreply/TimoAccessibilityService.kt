@@ -30,6 +30,15 @@ class TimoAccessibilityService : AccessibilityService() {
                                                 "Asistente Oficial",
                                                 "Mensaje del sistema"
                                                 )
+            // Respuestas de repuesto cuando la IA devuelve vacio; se elige una al azar.
+            private val EMPTY_AI_FALLBACK_REPLIES = listOf(
+                "jajaja que tal ese dia!",
+                "jajaja contame como vas",
+                "jaja que andas haciendo",
+                "jeje y vos como andas",
+                "jajaja dale contame algo"
+            )
+
             private val KNOWN_UI_LABELS = setOf(
                   "Saudação à correspondência",
                   "Video",
@@ -467,7 +476,7 @@ class TimoAccessibilityService : AccessibilityService() {
                                        Log.e(TAG, "autoReplyWithAI: error de IA: " + result.message)
                                        if (result.message.contains("vacio", ignoreCase = true)) {
                                          Log.e(TAG, "autoReplyWithAI: IA devolvio vacio, uso respuesta de repuesto")
-                                         replyText = "jajaja que tal ese dia!"
+                                         replyText = EMPTY_AI_FALLBACK_REPLIES.random()
                                        } else {
                                          return false
                                        }
