@@ -9,6 +9,8 @@ import android.os.Bundle
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.core.app.NotificationCompat
 
 class TimoAccessibilityService : AccessibilityService() {
@@ -174,6 +176,18 @@ class TimoAccessibilityService : AccessibilityService() {
             return w > 10 && h > 10 && w < 3000 && h < 3000
       }
 
+      private fun isNetworkAvailable(): Boolean {
+            return try {
+                  val cm = getSystemService(ConnectivityManager::class.java) ?: return true
+                  val network = cm.activeNetwork ?: return false
+                  val capabilities = cm.getNetworkCapabilities(network) ?: return false
+                  capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            } catch (e: Exception) {
+                  Log.e(TAG, "EXCEPCION en isNetworkAvailable: " + e.toString())
+                  true
+            }
+      }
+
       private fun isStillInChat(): Boolean {
             val root = rootInActiveWindow ?: return false
             return findBestEditText(root) != null
@@ -206,12 +220,24 @@ class TimoAccessibilityService : AccessibilityService() {
                               Log.e(TAG, "dismissPopupIfPresent: ventana de regalo/mision/diario detectada, buscando boton X")
                               var closed = clickButtonByText(root, "×", "X (popup)")
                               if (!closed) closed = clickButtonByText(root, "X", "X (popup)")
+                              if (!closed) closed = clickCloseIconByDescription(root)
                               if (!closed) closed = clickCloseIconByPosition(root)
                               if (!closed) {
                                     Log.e(TAG, "dismissPopupIfPresent: no se encontro boton X, uso atras")
                                     performGlobalAction(GLOBAL_ACTION_BACK)
                               }
                               Thread.sleep(700)
+
+                              val stillThereRoot = rootInActiveWindow
+                              if (stillThereRoot != null) {
+                                    val stillTexts = mutableListOf<String>()
+                                    collectAllTexts(stillThereRoot, stillTexts, 0)
+                                    val stillPresent = stillTexts.any { t -> GIFT_POPUP_MARKERS.any { marker -> t.contains(marker, ignoreCase = true) } }
+                                    if (stillPresent) {
+                                          Log.e(TAG, "dismissPopupIfPresent: la ventana de regalo/mision sigue visible despues de intentar cerrarla, presiono atras de nuevo")
+                                          performGlobalAction(GLOBAL_ACTION_BACK)
+                                    }
+                              }
                               return true
                         }
 
@@ -280,7 +306,26 @@ class TimoAccessibilityService : AccessibilityService() {
 
               /** Busca un nodo con el texto exacto indicado, encuentra su ancestro tocable
                * y lo toca. Devuelve true si encontro y toco el boton. */
-               private fun clickButtonByText(root: AccessibilityNodeInfo, targetText: String, logLabel: String): Boolean {
+               private fun findNodeByDescriptionContains(node: AccessibilityNodeInfo, keywords: List<String>): AccessibilityNodeInfo? {
+      val desc = node.contentDescription?.toString()
+      if (!desc.isNullOrBlank() && keywords.any { kw -> desc.contains(kw, ignoreCase = true) }) return node
+      for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val found = findNodeByDescriptionContains(child, keywords)
+            if (found != null) return found
+      }
+      return null
+}
+
+private fun clickCloseIconByDescription(root: AccessibilityNodeInfo): Boolean {
+      val node = findNodeByDescriptionContains(root, listOf("cerrar", "close")) ?: return false
+      val button = findClickableAncestor(node, 6) ?: return false
+      val clickOk = button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+      Log.e(TAG, "clickCloseIconByDescription: click en icono por descripcion devolvio " + clickOk)
+      return clickOk
+}
+
+private fun clickButtonByText(root: AccessibilityNodeInfo, targetText: String, logLabel: String): Boolean {
                      val node = findNodeByExactText(root, targetText) ?: return false
                      val button = findClickableAncestor(node, 6) ?: return false
                      val clickOk = button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
@@ -321,6 +366,12 @@ class TimoAccessibilityService : AccessibilityService() {
                            var repliedCount = 0
                            while (attempts < MAX_UNREAD_PER_RUN) {
                                  attempts++
+
+                                 if (!isNetworkAvailable()) {
+                                       Log.e(TAG, "respondToAllUnread: sin conexion a internet (corte de wifi), pauso 10s para que se recupere sola")
+                                       Thread.sleep(10000)
+                                       continue
+                                 }
                                  val root = rootInActiveWindow
                                  if (root == null) {
                                        Log.e(TAG, "respondToAllUnread: root es null, freno")
