@@ -1,0 +1,4 @@
+name: Build APK
+on: { push: { branches: [main] } }
+permissions: { contents: write }
+jobs: { build: { runs-on: ubuntu-latest, steps: [ { uses: actions/checkout@v4 }, { name: Set up JDK 17, uses: actions/setup-java@v4, with: { distribution: temurin, java-version: '17' } }, { name: Set up Android SDK, uses: android-actions/setup-android@v3 }, { name: Grant exec permission, run: chmod +x gradlew }, { name: Build debug APK, run: ./gradlew assembleDebug --stacktrace }, { name: Upload APK artifact, uses: actions/upload-artifact@v4, with: { name: autoreply-debug-apk, path: app/build/outputs/apk/debug/*.apk } }, { name: Create Release, uses: softprops/action-gh-release@v2, with: { tag_name: "build-${{ github.run_number }}", name: "Build ${{ github.run_number }}", files: app/build/outputs/apk/debug/*.apk } } ] } }
