@@ -502,8 +502,8 @@ private fun clickButtonByText(root: AccessibilityNodeInfo, targetText: String, l
                            Log.e(TAG, "autoReplyWithAI: mensaje entrante detectado: " + incomingMessage)
 
                            if (incomingMessage.isNullOrBlank()) {
-                                 Log.e(TAG, "autoReplyWithAI: no se detecto mensaje entrante, cancelando")
-                                 return false
+                                 Log.e(TAG, "autoReplyWithAI: no se detecto mensaje entrante, envio respuesta de repuesto")
+                                 return typeAndSend(editText, editBounds, "🙂 ¿aún estás ahí?")
                            }
 
                            val apiKeys = SecurePrefs.getApiKeysList(applicationContext)
