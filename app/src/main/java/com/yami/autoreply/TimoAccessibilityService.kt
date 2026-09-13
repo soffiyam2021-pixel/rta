@@ -409,7 +409,7 @@ private fun clickButtonByText(root: AccessibilityNodeInfo, targetText: String, l
                                                                   Thread.sleep(500)
                                                                                                    var backAttempts = 0
                                                                                                    // Si hubo una ventana emergente antes o despues de la respuesta, no hace falta esperar tanto entre reintentos de "atras".
-                                                                                                   val backRetryDelayMs = if (popupBefore || popupAfter) 4000L else 2700L
+                                                                                                   val backRetryDelayMs = if (popupBefore || popupAfter) 2000L else 1500L
                                                                   while (isStillInChat() && backAttempts < 3) {
                                                                                                                performGlobalAction(GLOBAL_ACTION_BACK)
                                                                                                                                                       Thread.sleep(backRetryDelayMs)
