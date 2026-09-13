@@ -56,6 +56,7 @@ class TimoAccessibilityService : AccessibilityService() {
                   )
             private val KEYWORD_BLOCKLIST = listOf(
                   "recompensa",
+                  "Límites de violación",
                   "diamante",
                   "encanto",
                   "cautivado",
